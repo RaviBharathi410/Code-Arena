@@ -1,0 +1,10 @@
+apps/web/src/views/GameSpace.tsx(1,46): error TS6133: 'useMemo' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(6,5): error TS6133: 'Sword' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(6,12): error TS6133: 'Clock' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(7,5): error TS6133: 'BrainCircuit' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(8,22): error TS6133: 'AlertCircle' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(9,5): error TS6133: 'Award' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(10,25): error TS6133: 'History' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(11,18): error TS6133: 'ZapOff' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(11,26): error TS6133: 'Users' is declared but its value is never read.
+apps/web/src/views/GameSpace.tsx(104,30): error TS6133: 'setSelectedOpponent' is declared but its value is never read.

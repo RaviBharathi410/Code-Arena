@@ -9,9 +9,9 @@ import * as THREE from 'three';
 import {
     Trophy, Zap, Activity, Settings, LogOut,
     Sword, Target, Menu, X, BarChart2,
-    ChevronRight, Award, Clock, Shield,
+    ChevronRight, Award, Shield,
     Edit2, Check, Moon, Sun, Beaker, GitPullRequest,
-    Layers, Play
+    Layers, Play, Sparkles, Cpu
 } from 'lucide-react';
 
 // ── WebGL availability check ──────────────────────────────────────────────
@@ -162,28 +162,28 @@ const INITIAL_LEADERBOARD = [
 type Tab = 'command' | 'battle' | 'practice' | 'tournaments' | 'history' | 'leaderboard' | 'profile' | 'settings';
 
 // ── Radar Chart Component ─────────────────────────────────────────────────
-const SkillRadar: React.FC<{ isLight: boolean }> = ({ isLight }) => {
-    const skills = [
+const SkillRadar: React.FC<{ isLight: boolean; skills?: { name: string; value: number }[] }> = ({ isLight, skills }) => {
+    const data = useMemo(() => skills || [
         { name: 'Logic', value: 85 },
         { name: 'Speed', value: 72 },
         { name: 'Accuracy', value: 94 },
         { name: 'Data Struct', value: 65 },
         { name: 'Complexity', value: 78 },
-    ];
+    ], [skills]);
 
     const size = 300;
     const center = size / 2;
-    const radius = size * 0.4;
-    const angleStep = (Math.PI * 2) / skills.length;
+    const radius = size * 0.35;
+    const angleStep = (Math.PI * 2) / data.length;
 
-    const points = skills.map((s, i) => {
+    const points = data.map((s, i) => {
         const x = center + radius * (s.value / 100) * Math.cos(i * angleStep - Math.PI / 2);
         const y = center + radius * (s.value / 100) * Math.sin(i * angleStep - Math.PI / 2);
         return `${x},${y}`;
     }).join(' ');
 
     const webPoints = [0.2, 0.4, 0.6, 0.8, 1.0].map(level => {
-        return skills.map((_, i) => {
+        return data.map((_, i) => {
             const x = center + radius * level * Math.cos(i * angleStep - Math.PI / 2);
             const y = center + radius * level * Math.sin(i * angleStep - Math.PI / 2);
             return `${x},${y}`;
@@ -195,39 +195,39 @@ const SkillRadar: React.FC<{ isLight: boolean }> = ({ isLight }) => {
             <svg width={size} height={size} className="overflow-visible">
                 {/* Background Webs */}
                 {webPoints.map((p, i) => (
-                    <polygon key={i} points={p} fill="none" stroke={isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)"} strokeWidth="1" />
+                    <polygon key={i} points={p} fill="none" stroke={isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.06)"} strokeWidth="1" />
                 ))}
 
                 {/* Axes */}
-                {skills.map((_, i) => {
+                {data.map((_, i) => {
                     const x = center + radius * Math.cos(i * angleStep - Math.PI / 2);
                     const y = center + radius * Math.sin(i * angleStep - Math.PI / 2);
-                    return <line key={i} x1={center} y1={center} x2={x} y2={y} stroke={isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)"} />;
+                    return <line key={i} x1={center} y1={center} x2={x} y2={y} stroke={isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)"} />;
                 })}
 
                 {/* Skill Area */}
                 <polygon
                     points={points}
-                    fill={isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.2)"}
+                    fill={isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.15)"}
                     stroke={isLight ? "black" : "white"}
                     strokeWidth="2"
-                    className="animate-pulse"
+                    className="transition-all duration-1000"
                 />
 
                 {/* Labels */}
-                {skills.map((s, i) => {
-                    const x = center + (radius + 20) * Math.cos(i * angleStep - Math.PI / 2);
-                    const y = center + (radius + 20) * Math.sin(i * angleStep - Math.PI / 2);
+                {data.map((s, i) => {
+                    const x = center + (radius + 25) * Math.cos(i * angleStep - Math.PI / 2);
+                    const y = center + (radius + 25) * Math.sin(i * angleStep - Math.PI / 2);
                     return (
                         <text
                             key={i}
                             x={x}
                             y={y}
                             textAnchor="middle"
-                            fontSize="10"
-                            fontWeight="bold"
-                            fill={isLight ? "#666" : "#aaa"}
-                            className="uppercase tracking-tighter"
+                            fontSize="8"
+                            fontWeight="900"
+                            fill={isLight ? "#000" : "#fff"}
+                            className="uppercase tracking-[0.15em] opacity-40 italic"
                         >
                             {s.name}
                         </text>
@@ -365,36 +365,93 @@ export const Dashboard: React.FC = () => {
     );
 
     // ── Panel: Practice Lab ───────────────────────────────────────────────
-    const PracticeLabPanel = () => (
-        <div className="panel-content space-y-8">
-            <div>
-                <h2 className="text-4xl font-bold tracking-tighter uppercase">Practice Lab</h2>
-                <p className={isLight ? 'text-gray-600' : 'text-gray-400'}>Hone your skills with zero risk. Focus on adaptive training.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                    { title: 'Free Roam', desc: 'Unlimited time, all problems open.', icon: <Beaker size={24} />, tag: 'BASIC' },
-                    { title: 'Speed Drill', desc: 'Solve Easy tasks in under 2 mins.', icon: <Clock size={24} />, tag: 'TIMED' },
-                    { title: 'Logic Bomb', desc: 'Advanced recursive challenges.', icon: <Shield size={24} />, tag: 'HARD' },
-                ].map((item, i) => (
-                    <div key={i} className={`p-6 rounded-2xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}>
-                        <div className="flex justify-between items-start mb-6">
-                            <div className={isLight ? 'text-black' : 'text-white'}>{item.icon}</div>
-                            <span className="text-[10px] font-black px-2 py-1 bg-white/10 rounded">{item.tag}</span>
+    const PracticeLabPanel = () => {
+        const practiceSkills = useMemo(() => [
+            { name: 'Arrays', value: 75 },
+            { name: 'Graphs', value: 45 },
+            { name: 'DP', value: 60 },
+            { name: 'Trees', value: 82 },
+            { name: 'Strings', value: 90 },
+        ], []);
+
+        return (
+            <div className="panel-content space-y-12">
+                <div className="flex flex-col xl:flex-row gap-12">
+                    {/* Focus Area: Training Modes */}
+                    <div className="flex-1 space-y-10">
+                        <div className="space-y-2">
+                            <h2 className="text-4xl font-black tracking-tighter uppercase italic">Practice Lab</h2>
+                            <p className={`text-lg font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Adaptive training engine — optimized for skill vector evolution.</p>
                         </div>
-                        <h3 className="font-bold text-lg mb-2">{item.title}</h3>
-                        <p className="text-sm text-gray-500 mb-6">{item.desc}</p>
-                        <button
-                            onClick={() => navigate('/battle?mode=practice')}
-                            className={`w-full py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${isLight ? 'border-black hover:bg-black hover:text-white' : 'border-white hover:bg-white hover:text-black'}`}
-                        >
-                            Initialize
-                        </button>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[
+                                { title: 'Speed Run Mode', desc: 'Crush high-volume Easy/Medium tasks against a lethal clock.', icon: <Zap size={24} />, mode: 'SPEED' },
+                                { title: 'Deep Focus Mode', desc: 'Complex system architecture problems. Maximum logic precision.', icon: <Target size={24} />, mode: 'FOCUS' },
+                                { title: 'Weakness Fix', desc: 'AI-curated drills targeting your historical failure points.', icon: <Shield size={24} />, mode: 'ADAPTIVE' },
+                                { title: 'AI Coach Mode', desc: 'Real-time complexity analysis and logic optimization hints.', icon: <Sparkles size={24} />, mode: 'COACH' },
+                            ].map((mode, i) => (
+                                <button key={i} onClick={() => navigate('/battle?mode=practice&type=' + mode.mode.toLowerCase())}
+                                    className={`group p-8 rounded-[2.5rem] border text-left transition-all relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10 hover:bg-black/10' : 'bg-white/5 border-white/8 hover:bg-white/10'}`}>
+                                    <div className="flex justify-between items-start mb-8 relative z-10">
+                                        <div className={`p-4 rounded-3xl ${isLight ? 'bg-white shadow-lg' : 'bg-white/10 backdrop-blur-md'}`}>{mode.icon}</div>
+                                        <div className={`text-[10px] font-black uppercase tracking-[0.3em] opacity-30`}>{mode.mode}</div>
+                                    </div>
+                                    <h3 className="text-2xl font-black mb-3 relative z-10 uppercase tracking-tight">{mode.title}</h3>
+                                    <p className={`text-sm font-light leading-relaxed mb-8 relative z-10 ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>{mode.desc}</p>
+                                    <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest relative z-10 group-hover:gap-5 transition-all">
+                                        Initialize <ChevronRight size={14} />
+                                    </div>
+                                    <div className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-10 transition-opacity ${isLight ? 'bg-black' : 'bg-white'}`} />
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                ))}
+
+                    {/* Meta Info: Radar & Recommendations */}
+                    <div className="w-full xl:w-96 space-y-8">
+                        {/* Skill Radar Chart */}
+                        <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/8'}`}>
+                            <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 whitespace-nowrap">Skill Vector Tracking</div>
+                            <div className="mt-8 scale-110">
+                                <SkillRadar isLight={isLight} skills={practiceSkills} />
+                            </div>
+                        </div>
+
+                        {/* AI Recommendations Panel */}
+                        <div className={`p-8 rounded-[3rem] border relative overflow-hidden flex flex-col justify-between h-[320px] ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-2 mb-8">
+                                    <Cpu size={16} />
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.4em]">Engine Intelligence</h3>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="space-y-1">
+                                        <div className="text-3xl font-black italic uppercase tracking-tighter">Recommended</div>
+                                        <p className="text-[10px] uppercase font-black opacity-60 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Graphs (Weak Area)
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-4 items-center">
+                                        <div className="px-3 py-1 rounded-full border border-current text-[10px] font-black uppercase tracking-widest opacity-60">Medium</div>
+                                        <div className="text-[10px] font-black uppercase tracking-widest opacity-40">15 MIN CHALLENGE</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.25em] transition-all relative z-10 ${isLight ? 'bg-white text-black hover:scale-[0.98]' : 'bg-black text-white hover:scale-[0.98]'}`}>
+                                Launch Drill
+                            </button>
+
+                            <div className="absolute top-0 right-0 -mr-20 -mt-20 opacity-10">
+                                <Activity size={300} strokeWidth={4} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     // ── Panel: Tournaments ───────────────────────────────────────────────
     const TournamentsPanel = () => (
@@ -697,7 +754,7 @@ export const Dashboard: React.FC = () => {
     };
 
     return (
-        <div className={`relative min-h-screen w-full transition-colors duration-500 flex ${isLight ? 'bg-gray-50 text-black' : 'bg-[#020202] text-white'}`} ref={containerRef}>
+        <div className={`relative h-screen w-full transition-colors duration-500 flex ${isLight ? 'bg-gray-50 text-black' : 'bg-[#020202] text-white'}`} ref={containerRef}>
             <div className="fixed inset-0 z-0 overflow-hidden">
                 {webGLSupported ? (
                     <WebGLErrorBoundary fallback={<CSSBackground isLight={isLight} />}>
@@ -776,7 +833,7 @@ export const Dashboard: React.FC = () => {
                 </nav>
             </aside>
 
-            <div className="flex-1 flex flex-col min-h-screen relative z-10">
+            <div className="flex-1 flex flex-col h-screen relative z-10">
                 <header className="flex items-center justify-between px-6 md:px-10 py-6 sticky top-0 z-30 transition-all duration-500">
                     <button onClick={() => setIsMenuOpen(true)} className={`p-2 border rounded-xl md:hidden ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}>
                         <Menu size={20} />
@@ -797,7 +854,7 @@ export const Dashboard: React.FC = () => {
                     </button>
                 </header>
 
-                <main className="flex-1 overflow-y-auto px-6 md:px-10 lg:px-16 py-4 dash-element scrollbar-hide">
+                <main className="flex-1 overflow-y-auto px-6 md:px-10 lg:px-16 py-4 dash-element">
                     {panels[activeTab]}
                 </main>
             </div>
