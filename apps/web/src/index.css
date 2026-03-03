@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --bg-primary: #050507;
+    --bg-secondary: #0d0d12;
+    --bg-surface: #12121a;
+    --accent-primary: #00f0ff;
+    --accent-secondary: #7c3aed;
+    --accent-glow: rgba(0, 240, 255, 0.15);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-bright: rgba(0, 240, 255, 0.3);
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+
+    /* shadcn/ui CSS variables — dark theme mapped to project palette */
+    --background: 240 5% 4%;
+    /* #050507 */
+    --foreground: 0 0% 100%;
+    /* #ffffff */
+    --card: 240 7% 8%;
+    /* #12121a */
+    --card-foreground: 0 0% 100%;
+    --popover: 240 7% 8%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 183 100% 50%;
+    /* #00f0ff cyan */
+    --primary-foreground: 240 5% 4%;
+    --secondary: 263 69% 52%;
+    /* #7c3aed violet */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 5% 10%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 183 100% 50%;
+    --accent-foreground: 240 5% 4%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100% / 0.05;
+    --input: 0 0% 100% / 0.08;
+    --ring: 183 100% 50%;
+    --radius: 0.5rem;
+}
+
+
+@layer base {
+
+    html,
+    body,
+    #root {
+        @apply h-full overflow-hidden;
+    }
+
+    body {
+        @apply m-0 bg-bg-primary text-text-primary font-sans antialiased;
+        background-image: theme('backgroundImage.gradient-main');
+        background-attachment: fixed;
+    }
+
+    * {
+        @apply border-border-subtle;
+        box-sizing: border-box;
+    }
+}
+
+@layer components {
+    .text-gradient {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-primary to-accent-secondary;
+    }
+
+    .glass-effect {
+        @apply bg-bg-surface/60 backdrop-blur-xl border border-border-subtle;
+    }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    @apply bg-bg-primary;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-border-bright/20 rounded-full transition-colors;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    @apply bg-border-bright/40;
+}
+
+@keyframes loading-slide {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.animate-loading {
+    animation: loading-slide 2s infinite linear;
+}

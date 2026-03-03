@@ -1,0 +1,7 @@
+/* Main App Layout Styles */
+.app-main {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #0d0d12;
+}

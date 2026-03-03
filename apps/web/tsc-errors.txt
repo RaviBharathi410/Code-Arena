@@ -1,0 +1,11 @@
+src/components/ui/contact-2.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ui/NeonButton.tsx(1,25): error TS6133: 'useEffect' is declared but its value is never read.
+src/components/ui/NeonButton.tsx(2,1): error TS6133: 'gsap' is declared but its value is never read.
+src/views/BattleArena.tsx(7,28): error TS6133: 'PenTool' is declared but its value is never read.
+src/views/BattleArena.tsx(7,61): error TS6133: 'LogOut' is declared but its value is never read.
+src/views/Dashboard.tsx(11,5): error TS6133: 'User' is declared but its value is never read.
+src/views/Dashboard.tsx(12,5): error TS6133: 'Settings' is declared but its value is never read.
+src/views/Dashboard.tsx(13,5): error TS6133: 'LogOut' is declared but its value is never read.
+src/views/Dashboard.tsx(14,5): error TS6133: 'Sword' is declared but its value is never read.
+src/views/Dashboard.tsx(16,5): error TS6133: 'Clock' is declared but its value is never read.
+src/views/Dashboard.tsx(21,19): error TS6133: 'logout' is declared but its value is never read.

@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build folders
+dist/
+build/
+.next/
+.expo/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
