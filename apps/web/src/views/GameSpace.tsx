@@ -21,8 +21,10 @@ import {
     Mic,
     MicOff,
     Flame,
-    TrendingUp
+    TrendingUp,
+    Menu
 } from 'lucide-react';
+import { useLayout } from '../components/layout/MainLayout';
 
 // ── Types ────────────────────────────────────────────────────────────────
 interface Problem {
@@ -89,6 +91,7 @@ const PROBLEMS: Problem[] = [
 export const GameSpace: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { setIsMenuOpen } = useLayout();
     const [searchParams] = useSearchParams();
     const mode = searchParams.get('mode');
     const isPractice = mode === 'practice' || location.pathname.includes('practice');
@@ -382,13 +385,6 @@ export const GameSpace: React.FC = () => {
         gsap.fromTo('.editor-container', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.8 });
     }, []);
 
-    const handleExitClick = useCallback(() => {
-        if (isRunning && !isComplete) {
-            setShowExitWarning(true);
-        } else {
-            navigate('/dashboard');
-        }
-    }, [isRunning, isComplete, navigate]);
 
     // Voice Commands
     const [voiceFeedback, setVoiceFeedback] = useState('');
@@ -420,8 +416,11 @@ export const GameSpace: React.FC = () => {
             {/* ── Match Header ── */}
             <header className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-black/80 backdrop-blur-xl z-20">
                 <div className="flex items-center gap-6">
-                    <button onClick={handleExitClick} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-500 hover:text-white">
-                        <X size={20} />
+                    <button
+                        onClick={() => setIsMenuOpen(true)}
+                        className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all group"
+                    >
+                        <Menu size={18} className="group-hover:scale-110 transition-transform" />
                     </button>
                     <div className="flex items-center gap-2">
                         {isPractice ? <Shield size={18} className="text-blue-500" /> : <Activity size={18} className="text-green-500" />}

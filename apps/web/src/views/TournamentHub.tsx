@@ -72,25 +72,28 @@ const TOURNAMENTS_DATA: Tournament[] = [
 
 export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean }> = ({ isLight, isStandalone: propStandalone }) => {
     const navigate = useNavigate();
-    const { tournaments, fetchTournaments } = useArenaStore();
+    const { tournaments } = useArenaStore();
     const [activeFilter, setActiveFilter] = useState<'Upcoming' | 'Live' | 'Completed'>('Upcoming');
 
     useEffect(() => {
-        if (tournaments.length === 0) fetchTournaments();
+        // Redundant fetch removed - handled by parent Dashboard
     }, []);
 
     useEffect(() => {
         if (filteredTournaments.length === 0) return;
 
         const ctx = gsap.context(() => {
-            gsap.from('.tournament-card', {
-                y: 30,
-                opacity: 0,
-                duration: 0.8,
-                stagger: 0.1,
-                ease: 'power3.out',
-                clearProps: 'all'
-            });
+            const cards = document.querySelectorAll('.tournament-card');
+            if (cards.length > 0) {
+                gsap.from('.tournament-card', {
+                    y: 30,
+                    opacity: 0,
+                    duration: 0.8,
+                    stagger: 0.1,
+                    ease: 'power3.out',
+                    clearProps: 'all'
+                });
+            }
         });
         return () => ctx.revert();
     }, [activeFilter, tournaments.length]);
@@ -121,7 +124,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
     const isStandalone = propStandalone ?? (location.pathname === '/tournaments' && !['/dashboard', '/battle', '/practice', '/history'].some(p => location.pathname.startsWith(p)));
 
     return (
-        <div className={`w-full ${isStandalone ? 'h-screen overflow-y-auto custom-scrollbar bg-[#020202]' : 'bg-transparent'} ${isLight ? 'bg-gray-50 text-black' : 'text-white'} space-y-8 pb-12 relative px-4 md:px-8`}>
+        <div className={`w-full panel-content ${isStandalone ? 'h-screen overflow-y-auto custom-scrollbar bg-[#020202]' : 'bg-transparent'} ${isLight ? 'bg-gray-50 text-black' : 'text-white'} space-y-8 pb-12 relative px-4 md:px-8`}>
             {isStandalone && (
                 <button
                     onClick={() => navigate('/dashboard')}

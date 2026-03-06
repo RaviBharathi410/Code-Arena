@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
-import { Activity, Users, Shield, Zap, Target, Search } from 'lucide-react';
+import { Activity, Users, Shield, Zap, Target, Search, Menu } from 'lucide-react';
+import { useLayout } from '../components/layout/MainLayout';
 
 const OPPONENTS = [
     { id: '1', name: 'Ghost_Runner_32', rank: 'Diamond', rp: 3450, winRate: 68.4, avatar: 'GR', matches: 1204 },
@@ -12,6 +13,7 @@ const OPPONENTS = [
 
 export const OpponentSelection: React.FC = () => {
     const navigate = useNavigate();
+    const { setIsMenuOpen } = useLayout();
     const containerRef = useRef<HTMLDivElement>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -79,12 +81,12 @@ export const OpponentSelection: React.FC = () => {
                 <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-white/5 rounded-full blur-[100px] pointer-events-none transform -translate-x-1/2 translate-y-1/3" />
 
                 <header className="relative z-10 mb-16 header-element">
-                    <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center gap-6 mb-4">
                         <button
-                            onClick={() => navigate('/dashboard')}
-                            className="p-2 hover:bg-white/10 rounded-full transition-colors mr-4"
+                            onClick={() => setIsMenuOpen(true)}
+                            className="p-3.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group"
                         >
-                            <Activity size={24} className="text-gray-400 hover:text-white" />
+                            <Menu size={20} className="group-hover:scale-110 transition-transform" />
                         </button>
                         <span className="px-3 py-1 text-xs font-bold tracking-widest uppercase border border-white/20 rounded-full bg-white/5 backdrop-blur-sm">
                             Matchmaking Sector
