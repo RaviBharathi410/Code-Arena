@@ -6,6 +6,10 @@ import dotenv from 'dotenv';
 import { authMiddleware } from './middleware/auth';
 import { socketAuthMiddleware } from './middleware/socketAuth';
 import authRoutes from './routes/auth';
+import problemRoutes from './routes/problems';
+import matchRoutes from './routes/matches';
+import leaderboardRoutes from './routes/leaderboard';
+import tournamentRoutes from './routes/tournaments';
 import { battleService } from './services/battle';
 
 dotenv.config();
@@ -24,6 +28,10 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/problems', problemRoutes);
+app.use('/api/matches', matchRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Battle Arena Backend is running' });

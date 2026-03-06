@@ -1,14 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { gsap } from 'gsap';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import gsap from 'gsap';
+import { useBattleStore } from '../store/useBattleStore';
+import { useVoiceCommand } from '../hooks/useVoiceCommand';
+import { VoiceVisualizer } from '../components/ui/VoiceVisualizer';
 import {
     Activity,
-    X, CheckCircle2, Zap,
-    BarChart2, Shield, Signal,
-    SignalLow, WifiOff, Terminal,
-    Cpu, Layers, Timer,
-    Flame, TrendingUp, ChevronRight
+    X,
+    CheckCircle2,
+    Zap,
+    Shield,
+    Signal,
+    SignalLow,
+    WifiOff,
+    Terminal,
+    Cpu,
+    Layers,
+    Timer,
+    Mic,
+    MicOff,
+    Flame,
+    TrendingUp
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -24,27 +37,7 @@ interface Problem {
     testCases: { input: any; expected: any }[];
 }
 
-interface Opponent {
-    id: string;
-    name: string;
-    rank: string;
-    rp: number;
-    avatar: string;
-    difficulty: 'Novice' | 'Expert' | 'Master';
-    status: 'online' | 'searching' | 'in-game';
-}
-
 // ── Data ──────────────────────────────────────────────────────────────────
-const OPPONENTS: Opponent[] = [
-    { id: '1', name: 'Ghost_Runner_32', rank: 'Platinum', rp: 4820, avatar: 'G', difficulty: 'Expert', status: 'online' },
-    { id: '2', name: 'NeonShadow_X', rank: 'Diamond', rp: 5100, avatar: 'N', difficulty: 'Master', status: 'online' },
-    { id: '3', name: 'CipherKnight', rank: 'Gold', rp: 3200, avatar: 'C', difficulty: 'Expert', status: 'online' },
-    { id: '4', name: 'NullPointer_77', rank: 'Silver', rp: 1800, avatar: 'N', difficulty: 'Novice', status: 'online' },
-    { id: '5', name: 'VoidPulse_9', rank: 'Platinum', rp: 4500, avatar: 'V', difficulty: 'Expert', status: 'online' },
-    { id: '6', name: 'DataPhantom', rank: 'Gold', rp: 3400, avatar: 'D', difficulty: 'Expert', status: 'online' },
-    { id: '7', name: 'QuantumByte', rank: 'Master', rp: 6200, avatar: 'Q', difficulty: 'Master', status: 'online' },
-    { id: '8', name: 'AlphaBit_0', rank: 'Silver', rp: 1600, avatar: 'A', difficulty: 'Novice', status: 'online' },
-];
 
 const PROBLEMS: Problem[] = [
     {
@@ -95,18 +88,28 @@ const PROBLEMS: Problem[] = [
 
 export const GameSpace: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const mode = searchParams.get('mode');
-    const isPractice = mode === 'practice';
+    const isPractice = mode === 'practice' || location.pathname.includes('practice');
+
+    const {
+        initializeSocket, joinMatch, updateCode: syncCode,
+        problem: activeProblem, winner,
+        opponentCode: liveOpponentCode, submitCode: socketSubmit
+    } = useBattleStore();
+
 
     const [selectedProblem, setSelectedProblem] = useState(PROBLEMS[0]);
-    const selectedOpponent = OPPONENTS[0]; // Pre-selected for current match logic
+    // Selected variables
     const [code, setCode] = useState(selectedProblem.initialCode);
+    const [isComplete, setIsComplete] = useState(false);
+    const [showProblem, setShowProblem] = useState(true);
 
     // Timer state
     const [timeLeft, setTimeLeft] = useState(isPractice ? 0 : selectedProblem.timeLimit);
     const [isRunning, setIsRunning] = useState(false);
-    const [showResult, setShowResult] = useState(false);
+    const [showResults, setShowResults] = useState(false);
     const [score, setScore] = useState<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -124,9 +127,46 @@ export const GameSpace: React.FC = () => {
     const [liveStrategy, setLiveStrategy] = useState<string>('Brute Force');
     const [confidence, setConfidence] = useState<number>(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [showExitWarning, setShowExitWarning] = useState(false);
 
     const timerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Initial State Setup
+    useEffect(() => {
+        initializeSocket();
+
+        // If we have a matchId in location state or search params
+        const matchId = searchParams.get('id') || (location.state as any)?.matchId;
+        if (matchId) {
+            joinMatch(matchId);
+        }
+    }, [searchParams, location.state, initializeSocket, joinMatch]); // Added dependencies
+
+    useEffect(() => {
+        if (activeProblem) {
+            setSelectedProblem({
+                ...activeProblem,
+                initialCode: activeProblem.baseCode || activeProblem.initialCode || '',
+                timeLimit: 600,
+                constraints: [],
+                examples: []
+            });
+            setCode(activeProblem.baseCode || '');
+        }
+    }, [activeProblem]);
+
+    // Warn before browser reload/close
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isRunning && !isComplete) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isRunning, isComplete]);
 
     // Simulated WebRTC Signal Fluctuations
     useEffect(() => {
@@ -233,7 +273,7 @@ export const GameSpace: React.FC = () => {
         }, 1000);
 
         return () => clearTimeout(debounceTimer);
-    }, [code, isRunning]);
+    }, [code, isRunning, liveComplexity]);
 
     useEffect(() => {
         if (isRunning) {
@@ -250,26 +290,29 @@ export const GameSpace: React.FC = () => {
     }, [isRunning, timeLeft, isPractice]);
 
     const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleStartMatch = () => {
-        setIsRunning(true);
-        gsap.fromTo('.editor-container', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.8 });
-    };
+    const confirmExit = useCallback(() => {
+        setIsRunning(false);
+        setShowExitWarning(false);
+        navigate('/dashboard', { replace: true });
+    }, [navigate]);
 
-    const handleAutoSubmit = () => {
-        clearInterval(timerRef.current);
-        handleSubmit();
-    };
-
-    const handleSubmit = () => {
+    const handleSubmit = useCallback(() => {
+        if (isSubmitting || isComplete) return;
         setIsSubmitting(true);
         setSubmissionStatus('running');
 
-        // Simulate test case execution
+        // Real submission via socket
+        socketSubmit(code, 'javascript');
+
+        // Mark local as complete
+        setIsComplete(true);
+
+        // Simulate test case execution locally for instant feedback
         setTimeout(() => {
             setSubmissionStatus('passed');
 
@@ -299,24 +342,85 @@ export const GameSpace: React.FC = () => {
                     expectedGain: 18,
                     streakBonus: 14,
                     timeTaken,
+                    executionTime: Math.floor(Math.random() * 200) + 50, // ms
+                    memoryMB: 14.2,
+                    cpuCycles: '2.4M',
+                    inputSize: '10^4 elements',
+                    percentileSpeed: 72,
+                    percentileMemory: 30,
+                    benchmarks: {
+                        top10Memory: 9.1,
+                        globalAvgMemory: 18.4
+                    },
                     efficiency,
                     complexity,
                     heatmap,
                     result: isPractice ? 'COMPLETED' : (accuracy > 85 ? 'VICTORY' : 'DEFEAT')
                 });
                 setIsSubmitting(false);
-                setShowResult(true);
+                setShowResults(true);
                 setShowScoreImpact(false);
+
+                // Animate bars after a short delay to ensure modal is rendered
+                setTimeout(() => {
+                    gsap.fromTo('.benchmark-bar',
+                        { width: 0 },
+                        { width: (_i, target) => (target as HTMLElement).dataset.width + '%', duration: 1, ease: 'power2.out', stagger: 0.1 }
+                    );
+                }, 600);
             }, 3500);
         }, 2000);
-    };
+    }, [isSubmitting, isComplete, socketSubmit, code, isPractice, timeLeft, selectedProblem]);
+
+    const handleAutoSubmit = useCallback(() => {
+        clearInterval(timerRef.current);
+        handleSubmit();
+    }, [handleSubmit]);
+
+    const handleStartMatch = useCallback(() => {
+        setIsRunning(true);
+        gsap.fromTo('.editor-container', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.8 });
+    }, []);
+
+    const handleExitClick = useCallback(() => {
+        if (isRunning && !isComplete) {
+            setShowExitWarning(true);
+        } else {
+            navigate('/dashboard');
+        }
+    }, [isRunning, isComplete, navigate]);
+
+    // Voice Commands
+    const [voiceFeedback, setVoiceFeedback] = useState('');
+    const commands = useMemo(() => ({
+        'submit code': handleSubmit,
+        'run tests': handleSubmit,
+        'reset code': () => setCode(selectedProblem?.initialCode || ''),
+        'show problem': () => setShowProblem(true),
+        'hide problem': () => setShowProblem(false),
+        'clear feedback': () => setVoiceFeedback(''),
+    }), [handleSubmit, selectedProblem]);
+
+    const { isListening, startListening, stopListening } = useVoiceCommand({
+        commands,
+        onInterimResults: (text) => setVoiceFeedback(text),
+        autoStart: true
+    });
+
+
+    // Results logic
+    useEffect(() => {
+        if (winner) {
+            setShowResults(true);
+        }
+    }, [winner]);
 
     return (
-        <div className="h-screen bg-[#020202] text-white flex flex-col font-sans selection:bg-white selection:text-black" ref={containerRef}>
-            {/* ── Match Status Bar (Top Center) ── */}
+        <div className="h-screen bg-[#020202] text-white flex flex-col font-sans selection:bg-white selection:text-black overflow-hidden" ref={containerRef}>
+            {/* ── Match Header ── */}
             <header className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-black/80 backdrop-blur-xl z-20">
                 <div className="flex items-center gap-6">
-                    <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-500 hover:text-white">
+                    <button onClick={handleExitClick} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-500 hover:text-white">
                         <X size={20} />
                     </button>
                     <div className="flex items-center gap-2">
@@ -329,7 +433,6 @@ export const GameSpace: React.FC = () => {
 
                 {/* Center Status Hub */}
                 <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-4">
-                    {/* Connection Status */}
                     <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
                         {signalStrength === 'stable' && <Signal size={14} className="text-green-500" />}
                         {signalStrength === 'weak' && <SignalLow size={14} className="text-yellow-500" />}
@@ -337,7 +440,6 @@ export const GameSpace: React.FC = () => {
                         <span className="text-[10px] font-mono opacity-50 uppercase">{signalStrength}</span>
                     </div>
 
-                    {/* Central Timer */}
                     <div className={`flex flex-col items-center px-6 py-1 rounded-2xl border transition-all duration-300 ${isRunning ? (isPractice ? 'border-blue-500/20 bg-blue-500/5' : 'border-red-500/20 bg-red-500/5') : 'border-white/5 bg-white/2'}`}>
                         <span className={`text-2xl font-black font-mono tracking-tighter ${isRunning ? (isPractice ? 'text-blue-400' : 'text-red-500') : 'text-gray-600'}`}>
                             {formatTime(timeLeft)}
@@ -345,7 +447,6 @@ export const GameSpace: React.FC = () => {
                         <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-30 -mt-1">{isPractice ? 'Time Elapsed' : 'Time Remaining'}</span>
                     </div>
 
-                    {/* Submission Status */}
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
                         <Terminal size={14} className={submissionStatus === 'passed' ? 'text-green-500' : 'text-gray-500'} />
                         <span className={`text-[10px] font-mono uppercase ${submissionStatus === 'running' ? 'animate-pulse text-yellow-500' : ''}`}>
@@ -354,298 +455,323 @@ export const GameSpace: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Action Controls */}
                 <div className="flex items-center gap-4">
                     {!isRunning ? (
                         <button onClick={handleStartMatch} className="bg-white text-black px-6 py-2 rounded-xl font-black text-xs tracking-widest uppercase hover:scale-105 transition-all shadow-xl">
                             {isPractice ? 'Start Session' : 'Begin Uplink'}
                         </button>
                     ) : (
-                        <button disabled={isSubmitting} onClick={handleSubmit} className="bg-green-500 text-white px-6 py-2 rounded-xl font-black text-xs tracking-widest uppercase hover:bg-green-600 transition-all disabled:opacity-50 flex items-center gap-2">
-                            {isSubmitting ? 'Processing...' : 'Submit Agent'}
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-end">
+                                <div className="flex items-center gap-2">
+                                    <VoiceVisualizer isActive={isListening} color="#22d3ee" />
+                                    <button
+                                        onClick={isListening ? stopListening : startListening}
+                                        className={`p-2 rounded-lg border transition-all ${isListening
+                                            ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                                            }`}
+                                    >
+                                        {isListening ? <Mic size={18} /> : <MicOff size={18} />}
+                                    </button>
+                                </div>
+                                {voiceFeedback && (
+                                    <span className="text-[10px] font-mono text-cyan-400/70 animate-pulse mt-1 max-w-[150px] truncate">
+                                        {voiceFeedback}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting || isComplete}
+                                className="px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-black font-black uppercase tracking-widest text-xs rounded-lg transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                            >
+                                <Zap size={14} />
+                                {isSubmitting ? 'Transmitting...' : 'Execute Uplink'}
+                            </button>
+                        </div>
                     )}
                 </div>
             </header>
 
-            {/* ── Main Layout ───────────────────────────────────────────────── */}
+            {/* ── Main Workspace ── */}
             <main className="flex-1 flex overflow-hidden">
-                {/* ── Left Sidebar ── */}
-                <aside className={`w-80 border-r border-white/10 flex flex-col bg-[#050505] overflow-y-auto ${isPractice && isRunning ? 'hidden' : ''}`}>
+                {/* ── Left: Problem Description ── */}
+                <aside
+                    className={`border-r border-white/10 flex flex-col bg-[#050505] overflow-hidden transition-all duration-500 ease-in-out ${showProblem ? 'w-[450px] opacity-100' : 'w-0 opacity-0'}`}
+                >
+                    <div className="p-8 overflow-y-auto flex-1 custom-scrollbar min-w-[450px]">
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-3xl font-black tracking-tighter uppercase italic">{selectedProblem.title}</h2>
+                            <button onClick={() => setShowProblem(false)} className="p-2 text-gray-500 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
 
-                    {/* Opponent Info / Match Stats */}
-                    {!isPractice && isRunning && (
-                        <div className="p-6 border-b border-white/10 space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-500">
-                                    <span>Opponent Activity</span>
-                                    {opponentStatus.typing && <span className="text-green-500 flex items-center gap-1 animate-pulse"><div className="w-1 h-1 bg-current rounded-full" /> Typing</span>}
-                                    {opponentStatus.idle && <span className="text-yellow-500">Idle</span>}
-                                </div>
+                        <div className="space-y-8">
+                            <p className="text-xl text-gray-400 font-light leading-relaxed">{selectedProblem.description}</p>
 
-                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-4">
-                                    <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center font-black relative ${opponentStatus.submitted ? 'border-green-500' : 'border-white/10'}`}>
-                                        {selectedOpponent.avatar}
-                                        {opponentStatus.typing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-black rounded-full" />}
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-bold flex items-center justify-between">
-                                            {selectedOpponent.name}
-                                            <span className="text-xs font-mono opacity-40">{selectedOpponent.rp} RP</span>
-                                        </p>
-                                        <div className="w-full h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
-                                            <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: opponentStatus.submitted ? '100%' : '45%' }} />
+                            <div className="space-y-6">
+                                {selectedProblem.examples.map((ex, i) => (
+                                    <div key={i} className="p-6 rounded-3xl bg-white/2 border border-white/5 space-y-4 font-mono text-sm group hover:border-white/10 transition-colors">
+                                        <div className="flex justify-between items-start">
+                                            <span className="text-[10px] font-black text-gray-600 uppercase">Example {i + 1}</span>
+                                            <Zap size={14} className="text-gray-700" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-gray-500 text-[10px] uppercase">Input</p>
+                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-blue-400">{ex.input}</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-gray-500 text-[10px] uppercase">Output</p>
+                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-green-400">{ex.output}</div>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-center">
-                                        <p className="text-[8px] font-black opacity-40 uppercase">Attempts</p>
-                                        <p className="text-sm font-bold font-mono">{opponentStatus.attempts}</p>
-                                    </div>
-                                    <div className="p-3 rounded-xl bg-white/2 border border-white/5 text-center">
-                                        <p className="text-[8px] font-black opacity-40 uppercase">Status</p>
-                                        <p className={`text-sm font-bold truncate ${opponentStatus.submitted ? 'text-green-500 animate-pulse' : 'text-gray-500'}`}>
-                                            {opponentStatus.submitted ? 'SUBMITTED' : 'SOLVING'}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="p-6 space-y-8">
-                        <div>
-                            <h3 className="text-[10px] uppercase tracking-[0.3em] font-black text-gray-500 mb-6 flex items-center gap-2">
-                                <Activity size={12} /> {isPractice ? 'Practice Focus' : 'Arena Objectives'}
-                            </h3>
-                            <div className="space-y-2">
-                                {PROBLEMS.map(p => (
-                                    <button key={p.id} onClick={() => !isRunning && setSelectedProblem(p)} className={`w-full text-left p-4 rounded-xl border transition-all ${selectedProblem.id === p.id ? 'bg-white/10 border-white/10' : 'border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}`}>
-                                        <p className="text-xs font-bold">{p.title}</p>
-                                        <p className="text-[10px] opacity-40 uppercase tracking-widest mt-1">{p.difficulty}</p>
-                                    </button>
                                 ))}
+                            </div>
+
+                            <div className="p-8 rounded-3xl bg-white/2 border border-white/5 space-y-4">
+                                <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Constraints</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedProblem.constraints.map((c, i) => (
+                                        <code key={i} className="px-3 py-1.5 rounded-lg bg-black text-xs font-mono text-gray-400 border border-white/5">{c}</code>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </aside>
 
-                {/* ── Center: Problem ── */}
-                <section className="flex-1 flex flex-col overflow-y-auto bg-[#080808]">
-                    <div className="p-10 max-w-4xl mx-auto space-y-12">
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-5xl font-black tracking-tighter uppercase">{selectedProblem.title}</h1>
-                                <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase border ${selectedProblem.difficulty === 'Easy' ? 'text-green-400 border-green-500/20 bg-green-500/5' : 'text-red-400 border-red-500/20 bg-red-500/5'}`}>
-                                    {selectedProblem.difficulty}
-                                </span>
-                            </div>
-                            <p className="text-xl text-gray-400 font-light leading-relaxed">{selectedProblem.description}</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {selectedProblem.examples.map((ex, i) => (
-                                <div key={i} className="p-6 rounded-3xl bg-white/2 border border-white/5 space-y-4 font-mono text-sm group hover:border-white/10 transition-colors">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-[10px] font-black text-gray-600 uppercase">Example {i + 1}</span>
-                                        <Zap size={14} className="text-gray-700" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-gray-500 text-xs uppercase">Input</p>
-                                        <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-blue-400">{ex.input}</div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-gray-500 text-xs uppercase">Output</p>
-                                        <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-green-400">{ex.output}</div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="p-8 rounded-3xl bg-white/2 border border-white/5 space-y-4">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Constraints</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {selectedProblem.constraints.map((c, i) => (
-                                    <code key={i} className="px-3 py-1.5 rounded-lg bg-black text-xs font-mono text-gray-400 border border-white/5">{c}</code>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* ── Right: Editor ── */}
-                <section className={`flex-1 flex flex-col border-l border-white/10 transition-all duration-700 bg-black editor-container ${!isRunning ? 'blur-sm grayscale opacity-30 pointer-events-none scale-105' : ''}`}>
-                    <div className="flex-1 relative">
+                {/* ── Center: Editor ── */}
+                <section className={`flex-1 flex flex-col transition-all duration-700 bg-black relative ${!isRunning ? 'blur-sm grayscale opacity-30 pointer-events-none scale-105' : ''}`}>
+                    <div className="flex-1 min-h-0 relative">
                         <Editor
                             height="100%"
                             defaultLanguage="javascript"
                             theme="vs-dark"
                             value={code}
-                            onChange={(val) => setCode(val || '')}
+                            onChange={(val) => {
+                                setCode(val || '');
+                                syncCode(val || '');
+                            }}
                             options={{
-                                fontSize: 16,
+                                fontSize: 14,
                                 minimap: { enabled: false },
-                                padding: { top: 30 },
-                                fontFamily: 'JetBrains Mono, Menlo, monospace',
-                                lineNumbers: 'on',
+                                padding: { top: 20 },
+                                backgroundColor: '#000000',
                                 scrollBeyondLastLine: false,
                                 automaticLayout: true,
-                                letterSpacing: -0.5,
-                                cursorStyle: 'block',
-                                lineDecorationsWidth: 15
+                                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                lineNumbers: 'on',
+                                glyphMargin: false,
+                                folding: true,
+                                lineDecorationsWidth: 10,
+                                lineNumbersMinChars: 3
                             }}
                         />
                     </div>
 
-                    {/* Real-time Score Impact Preview */}
+                    {/* Score Impact Toast */}
                     {showScoreImpact && (
-                        <div className="absolute bottom-52 right-8 z-40 score-impact-panel w-56 p-6 rounded-3xl bg-black border border-green-500/50 shadow-[0_0_40px_rgba(34,197,94,0.2)]">
-                            <div className="flex items-center gap-2 text-green-500 mb-4">
+                        <div className="absolute bottom-10 right-10 z-30 p-6 rounded-3xl bg-black border border-green-500/50 shadow-[0_0_40px_rgba(34,197,94,0.2)] animate-in slide-in-from-bottom-5 duration-500">
+                            <div className="flex items-center gap-2 text-green-500 mb-2">
                                 <Zap size={16} fill="currentColor" />
-                                <span className="text-xs font-black uppercase tracking-widest">Score Forecast</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest">Score Prediction</span>
                             </div>
-                            <div className="space-y-4">
-                                <div className="text-4xl font-black text-white">+32 <span className="text-xs text-gray-500 uppercase tracking-tighter">Rank Points</span></div>
-                                <div className="space-y-2 pt-4 border-t border-white/10">
-                                    <div className="flex justify-between text-[10px] font-black uppercase">
-                                        <span className="opacity-40">Base Reward</span>
-                                        <span className="text-gray-300">+18</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px] font-black uppercase">
-                                        <span className="text-orange-500">Streak Bonus</span>
-                                        <span className="text-orange-500">+14</span>
-                                    </div>
+                            <div className="text-4xl font-black text-white">+32 <span className="text-[10px] text-gray-500 uppercase tracking-tighter">RP</span></div>
+                        </div>
+                    )}
+                </section>
+
+                {/* ── Right: Analytics & Opponent ── */}
+                <aside className="w-96 border-l border-white/10 flex flex-col bg-[#050505]">
+                    {/* Real-time Analytics */}
+                    <div className="p-6 border-b border-white/10 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Cpu size={14} className="text-blue-500" />
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Agent Intel</h3>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${isAnalyzing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+                                <span className="text-[10px] font-mono text-gray-400">
+                                    {isAnalyzing ? 'Analyzing...' : 'Standby'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1">
+                                <p className="text-[8px] font-black text-gray-600 uppercase">Complexity</p>
+                                <p className="text-sm font-bold text-white complexity-badge">{liveComplexity}</p>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1">
+                                <p className="text-[8px] font-black text-gray-600 uppercase">Strategy</p>
+                                <p className="text-sm font-bold text-cyan-400">{liveStrategy}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-gray-500">
+                                <span>Logic Efficiency</span>
+                                <span className="text-white">{confidence}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-1000" style={{ width: `${confidence}%` }} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Opponent Code Buffer */}
+                    {!isPractice && (
+                        <div className="flex-1 flex flex-col min-h-0 bg-black/40">
+                            <div className="px-6 py-4 flex items-center justify-between border-b border-white/5">
+                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                    <Terminal size={12} />
+                                    Opponent Buffer
                                 </div>
+                                {opponentStatus.typing && <span className="text-green-500 text-[8px] animate-pulse uppercase font-black">Typing...</span>}
+                            </div>
+                            <div className="flex-1 min-h-0">
+                                <Editor
+                                    height="100%"
+                                    defaultLanguage="javascript"
+                                    theme="vs-dark"
+                                    value={liveOpponentCode || "// Awaiting data uplink..."}
+                                    options={{
+                                        fontSize: 11,
+                                        minimap: { enabled: false },
+                                        readOnly: true,
+                                        backgroundColor: '#000000',
+                                        domReadOnly: true,
+                                        lineNumbers: 'off',
+                                        folding: false,
+                                        scrollBeyondLastLine: false,
+                                        glyphMargin: false,
+                                        lineDecorationsWidth: 0
+                                    }}
+                                />
                             </div>
                         </div>
                     )}
 
-                    <div className="h-48 border-t border-white/10 bg-[#050505] p-6 relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2">
-                                <Cpu size={14} className="text-blue-500" />
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Live Agent Analytics</h3>
-                            </div>
-                            <div className="flex gap-4">
-                                <div className="flex items-center gap-1.5 group cursor-help relative">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-[10px] font-mono text-green-500">
-                                        {isAnalyzing ? 'Scanning Pattern...' : `${liveStrategy} (${confidence}%)`}
-                                    </span>
-                                    <div className="absolute bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-black border border-white/10 rounded-lg text-[8px] text-gray-400 z-50">
-                                        Pattern detection based on data structure usage, control flow, and variable tracking.
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-gray-600">
-                                    <BarChart2 size={12} className={isAnalyzing ? 'animate-spin' : ''} />
-                                    <span className="text-[10px] font-mono uppercase complexity-badge">
-                                        {isAnalyzing ? 'Analyzing Structure...' : `${liveComplexity} Prediction`}
-                                    </span>
-                                </div>
-                            </div>
+                    {/* Bottom Meta */}
+                    <div className="p-6 border-t border-white/10 bg-black/20">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Signal Stability</span>
+                            <span className={`text-[10px] font-mono ${signalStrength === 'stable' ? 'text-green-500' : 'text-yellow-500'}`}>{signalStrength.toUpperCase()}</span>
                         </div>
-                        <div className="flex gap-2 h-20 items-end">
-                            {Array.from({ length: 24 }).map((_, i) => (
-                                <div key={i} className="flex-1 bg-white/5 rounded-t-sm relative group overflow-hidden" style={{ height: `${Math.random() * 80 + 20}%` }}>
-                                    <div className="absolute inset-x-0 bottom-0 bg-white/10 animate-pulse" style={{ height: '20%' }} />
-                                </div>
+                        <div className="flex gap-1 h-8 items-end">
+                            {Array.from({ length: 20 }).map((_, i) => (
+                                <div key={i} className="flex-1 bg-white/5 rounded-t-sm" style={{ height: `${Math.random() * 80 + 20}%` }} />
                             ))}
                         </div>
                     </div>
-                </section>
+                </aside>
             </main>
 
-            {/* ── Post-Match breakdown screen (within Result Modal) ── */}
-            {showResult && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-500">
-                    <div className="w-full max-w-4xl bg-[#080808] border border-white/10 rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(255,255,255,0.05)] flex flex-col lg:flex-row h-[90vh]">
-
-                        {/* Side Branding/Summary */}
-                        <div className={`w-full lg:w-80 p-12 flex flex-col justify-between relative overflow-hidden ${score.result === 'VICTORY' ? 'bg-green-500' : 'bg-red-500'}`}>
-                            <div className="relative z-10 space-y-2">
-                                <p className="text-black text-xs font-black uppercase tracking-[0.3em]">Protocol Result</p>
-                                <h2 className="text-6xl font-black text-black leading-none italic">{score.result}</h2>
+            {/* ── Results Overlay ── */}
+            {showResults && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in fade-in duration-700">
+                    <div className="w-full max-w-5xl bg-[#080808] border border-white/10 rounded-[3.5rem] overflow-hidden shadow-[0_0_120px_rgba(0,0,0,0.5)] flex flex-col lg:flex-row h-[85vh]">
+                        {/* Summary Panel */}
+                        <div className={`w-full lg:w-96 p-12 flex flex-col justify-between relative overflow-hidden ${score.result === 'VICTORY' ? 'bg-cyan-500' : 'bg-red-500'}`}>
+                            <div className="relative z-10 space-y-3">
+                                <p className="text-black text-[10px] font-black uppercase tracking-[0.4em]">Protocol Status</p>
+                                <h2 className="text-7xl font-black text-black leading-none italic tracking-tighter">{score.result}</h2>
                             </div>
 
                             <div className="relative z-10">
-                                <div className="text-black font-black text-sm uppercase tracking-widest mb-1 flex items-center gap-2">
-                                    <TrendingUp size={16} /> Impact
+                                <div className="text-black font-black text-xs uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                    <TrendingUp size={16} /> Rating Adjustment
                                 </div>
-                                <div className="text-5xl font-black text-black">+{score.rpGain}</div>
-                                <p className="text-black/60 text-[10px] font-black uppercase tracking-widest mt-2">New Rank Points: {selectedOpponent.rp + score.rpGain}</p>
+                                <div className="text-6xl font-black text-black">+{score.rpGain}</div>
+                                <p className="text-black/50 text-[10px] font-black uppercase tracking-widest mt-4 underline decoration-2 offset-4">Baseline Calibration Complete</p>
                             </div>
 
-                            <div className="absolute top-0 right-0 -mr-20 -mt-20 opacity-20">
-                                <Activity size={300} strokeWidth={4} />
+                            <div className="absolute top-0 right-0 -mr-24 -mt-24 opacity-10 rotate-12">
+                                <Activity size={400} strokeWidth={2} />
                             </div>
                         </div>
 
-                        {/* Detailed Metrics */}
-                        <div className="flex-1 p-12 overflow-y-auto space-y-12">
+                        {/* Metrics Panel */}
+                        <div className="flex-1 p-16 overflow-y-auto custom-scrollbar space-y-16">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h3 className="text-2xl font-black tracking-tight uppercase">Performance Breakdown</h3>
-                                    <p className="text-gray-500 text-xs font-mono mt-1">LOG_ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}</p>
+                                    <h3 className="text-3xl font-black tracking-tight uppercase italic">Match Analytics</h3>
+                                    <p className="text-gray-500 text-[10px] font-mono mt-2 tracking-widest uppercase opacity-40">Session ID: {Math.random().toString(36).substr(2, 12).toUpperCase()}</p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => navigate('/dashboard')} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white text-black transition-all group">
-                                        <ChevronRight size={20} className="text-white group-hover:text-black" />
-                                    </button>
-                                </div>
+                                <button onClick={() => navigate('/dashboard')} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white hover:text-black transition-all group">
+                                    <X size={24} />
+                                </button>
                             </div>
 
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                 {[
-                                    { icon: <CheckCircle2 size={16} />, label: 'Accuracy', val: score.accuracy + '%', sub: 'Passed 12/12' },
-                                    { icon: <Timer size={16} />, label: 'Solve Time', val: formatTime(score.timeTaken), sub: '25% Faster' },
-                                    { icon: <Cpu size={16} />, label: 'Efficiency', val: score.efficiency + '%', sub: 'O(N) Optimal' },
-                                    { icon: <BarChart2 size={16} />, label: 'Rank Gain', val: '+' + score.rpGain, sub: 'Rank Up Soon' },
+                                    { icon: <CheckCircle2 size={18} />, label: 'Accuracy', val: score.accuracy + '%', sub: 'Passed All Tests' },
+                                    { icon: <Timer size={18} />, label: 'Efficiency', val: formatTime(score.timeTaken), sub: 'Elite Performance' },
+                                    { icon: <Cpu size={18} />, label: 'Cycle Load', val: score.cpuCycles, sub: 'Optimized Path' },
+                                    { icon: <Layers size={18} />, label: 'Input Load', val: score.inputSize, sub: 'High Stress' },
                                 ].map((m, i) => (
-                                    <div key={i} className="p-6 rounded-3xl bg-white/2 border border-white/5 space-y-3">
-                                        <div className="text-gray-500">{m.icon}</div>
+                                    <div key={i} className="p-8 rounded-[2rem] bg-white/2 border border-white/5 space-y-4 hover:border-white/20 transition-all group">
+                                        <div className="text-gray-600 group-hover:text-cyan-400 transition-colors">{m.icon}</div>
                                         <div>
-                                            <p className="text-2xl font-black">{m.val}</p>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 opacity-40">{m.label}</p>
+                                            <p className="text-3xl font-black text-white">{m.val}</p>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-1">{m.label}</p>
                                         </div>
-                                        <p className="text-[10px] font-mono text-green-500/80">{m.sub}</p>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Heatmap & Efficiency Compare */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-6">
-                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-2">
-                                        <Flame size={14} className="text-orange-500" /> Interaction Heatmap
-                                    </h4>
-                                    <div className="flex gap-1 h-24 items-end bg-white/2 p-4 rounded-2xl border border-white/5">
-                                        {score.heatmap.map((v: number, i: number) => (
-                                            <div key={i} className="flex-1 bg-white/10 rounded-sm hover:bg-white/40 transition-colors" style={{ height: v + '%' }} />
-                                        ))}
-                                    </div>
-                                    <p className="text-[10px] text-gray-500 font-mono">Visualizing coding intensity and test execution frequency over duration.</p>
-                                </div>
-                                <div className="space-y-6">
-                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-2">
-                                        <Layers size={14} className="text-blue-500" /> Complexity Profile
-                                    </h4>
-                                    <div className="p-6 rounded-3xl bg-blue-500/5 border border-blue-500/10 flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs font-black uppercase opacity-60">Estimated Big O</p>
-                                            <p className="text-3xl font-black text-blue-400 mt-1">{score.complexity}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-xs font-black uppercase opacity-60">Memory Usage</p>
-                                            <p className="text-lg font-bold text-white mt-1">12.4 MB</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-[10px] text-gray-500 font-mono">Algorithm evaluated against spatial and temporal constraints. Efficiency score: 9.4/10.</p>
+                            <div className="space-y-10">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-3">
+                                    <Flame size={14} className="text-orange-500" /> Interaction Density Map
+                                </h4>
+                                <div className="flex gap-2 h-32 items-end bg-black/40 p-6 rounded-[2rem] border border-white/5">
+                                    {score.heatmap.map((v: number, i: number) => (
+                                        <div key={i} className="flex-1 bg-cyan-500/20 rounded-md hover:bg-cyan-500 transition-all duration-500" style={{ height: v + '%' }} />
+                                    ))}
                                 </div>
                             </div>
 
-                            <button onClick={() => navigate('/dashboard')} className="w-full py-6 rounded-3xl bg-white text-black font-black uppercase tracking-widest text-sm hover:scale-[1.01] transition-all shadow-2xl">
-                                Return to Command Center
+                            <button
+                                onClick={() => navigate('/dashboard')}
+                                className="w-full py-8 rounded-[2rem] bg-white text-black font-black uppercase tracking-[0.3em] text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_50px_rgba(255,255,255,0.1)]"
+                            >
+                                Return to Previous Sector
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Exit Warning Modal */}
+            {showExitWarning && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
+                    <div className="w-full max-w-md bg-[#0a0a0a] border border-red-500/30 rounded-3xl p-8 space-y-6 shadow-[0_0_50px_rgba(239,68,68,0.1)]">
+                        <div className="flex items-center gap-4 text-red-500">
+                            <Shield size={32} />
+                            <div>
+                                <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Warning: Combat Active</h3>
+                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Protocol Abandonment Imminent</p>
+                            </div>
+                        </div>
+                        <p className="text-gray-400 text-sm leading-relaxed">
+                            Leaving a live session will result in immediate rating penalty and disconnection from the arena protocols. Confirm termination?
+                        </p>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setShowExitWarning(false)}
+                                className="flex-1 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                            >
+                                Stay in Combat
+                            </button>
+                            <button
+                                onClick={confirmExit}
+                                className="flex-1 py-4 bg-red-500 hover:bg-red-400 text-black rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
+                            >
+                                Terminate Session
                             </button>
                         </div>
                     </div>

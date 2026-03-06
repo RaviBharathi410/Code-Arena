@@ -8,7 +8,6 @@ import { DemoOne } from './components/ui/demo';
 import { OpponentSelection } from './views/OpponentSelection';
 import { GameSpace } from './views/GameSpace';
 
-
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const { isAuthenticated } = useAuthStore();
     return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
@@ -32,6 +31,36 @@ function App() {
                     }
                 />
                 <Route
+                    path="/battle"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/practice"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/history"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
                     path="/opponents"
                     element={
                         <ProtectedRoute>
@@ -42,7 +71,17 @@ function App() {
                     }
                 />
                 <Route
-                    path="/battle"
+                    path="/arena/solo"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <GameSpace />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/arena/practice"
                     element={
                         <ProtectedRoute>
                             <MainLayout>
@@ -57,6 +96,46 @@ function App() {
                         <ProtectedRoute>
                             <MainLayout>
                                 <BattleArena />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/tournaments"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/leaderboard"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/profile"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
+                            </MainLayout>
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/settings"
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout>
+                                <Dashboard />
                             </MainLayout>
                         </ProtectedRoute>
                     }

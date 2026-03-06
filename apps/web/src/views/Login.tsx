@@ -40,7 +40,11 @@ export const Login: React.FC = () => {
         setError('');
         try {
             const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-            const response = await axios.post(`http://localhost:3001${endpoint}`, formData);
+            const payload = isLogin
+                ? { email: formData.email, password: formData.password }
+                : formData;
+
+            const response = await axios.post(`http://localhost:3001${endpoint}`, payload);
             setAuth(response.data.user, response.data.token);
             navigate('/dashboard');
         } catch (err: any) {

@@ -70,4 +70,27 @@ router.get('/me', authMiddleware, async (req: any, res) => {
     }
 });
 
+router.patch('/me', authMiddleware, async (req: any, res) => {
+    const { username, email } = req.body;
+    try {
+        const [updatedUser] = await db.update(users)
+            .set({ username, email })
+            .where(eq(users.id, req.user.id))
+            .returning();
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const { passwordHash, ...safeUser } = updatedUser;
+        res.json(safeUser);
+    } catch (err: any) {
+        console.error('Update Profile Error:', err);
+        if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Username or email already taken' });
+        }
+        res.status(500).json({ message: 'Error updating profile' });
+    }
+});
+
 export default router;

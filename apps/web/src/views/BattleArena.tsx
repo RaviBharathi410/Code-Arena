@@ -4,7 +4,7 @@ import { useBattleStore } from '../store/useBattleStore';
 import { useVoiceToCode } from '../hooks/useVoiceToCode';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import { Trophy, Zap, Mic, ChevronRight, Activity, Sword, Target, FileText, Code2, BrainCircuit } from 'lucide-react';
+import { Trophy, Zap, Mic, ChevronRight, Activity, Sword, Target, FileText, Code2, BrainCircuit, X, Shield } from 'lucide-react';
 import { NeonButton } from '../components/ui/NeonButton';
 import { GlassCard } from '../components/ui/GlassCard';
 import { VoiceVisualizer } from '../components/ui/VoiceVisualizer';
@@ -51,6 +51,7 @@ export const BattleArena: React.FC = () => {
     const [notes, setNotes] = useState('');
     const [activeTab, setActiveTab] = useState<'code' | 'notes'>('code');
     const [complexity, setComplexity] = useState({ time: 'O(1)', space: 'O(1)' });
+    const [showExitWarning, setShowExitWarning] = useState(false);
 
     const headerRef = useRef<HTMLDivElement>(null);
     const arenaRef = useRef<HTMLDivElement>(null);
@@ -112,6 +113,30 @@ export const BattleArena: React.FC = () => {
         }
     }, [winner, code]);
 
+    const handleExitClick = () => {
+        if (isMatchActive && !winner) {
+            setShowExitWarning(true);
+        } else {
+            navigate('/dashboard');
+        }
+    };
+
+    const confirmExit = () => {
+        setShowExitWarning(false);
+        navigate('/dashboard', { replace: true });
+    };
+
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isMatchActive && !winner) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isMatchActive, winner]);
+
     const handleJoin = () => {
         if (matchId) joinMatch(matchId);
     };
@@ -126,16 +151,21 @@ export const BattleArena: React.FC = () => {
     return (
         <div className="flex flex-col h-full space-y-6" ref={arenaRef}>
             <header className="flex items-center justify-between" ref={headerRef}>
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
-                        <Activity size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-white tracking-tight">Cyber Battle Arena</h2>
-                        <div className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest font-semibold">
-                            <span className="text-cyan-400">Live Match</span>
-                            <span>•</span>
-                            <span className="font-mono">{matchId || 'Protocol Nexus-12'}</span>
+                <div className="flex items-center gap-6">
+                    <button onClick={handleExitClick} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-500 hover:text-white">
+                        <X size={20} />
+                    </button>
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                            <Activity size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white tracking-tight">Cyber Battle Arena</h2>
+                            <div className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest font-semibold">
+                                <span className="text-cyan-400">Live Match</span>
+                                <span>•</span>
+                                <span className="font-mono">{matchId || 'Protocol Nexus-12'}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -322,6 +352,38 @@ export const BattleArena: React.FC = () => {
                             Return to Command Center
                         </NeonButton>
                     </GlassCard>
+                </div>
+            )}
+
+            {/* Exit Warning Modal */}
+            {showExitWarning && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
+                    <div className="w-full max-w-md bg-[#0a0a0a] border border-red-500/30 rounded-3xl p-8 space-y-6 shadow-[0_0_50px_rgba(239,68,68,0.1)]">
+                        <div className="flex items-center gap-4 text-red-500">
+                            <Shield size={32} />
+                            <div>
+                                <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Warning: Combat Active</h3>
+                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Protocol Abandonment Imminent</p>
+                            </div>
+                        </div>
+                        <p className="text-gray-400 text-sm leading-relaxed">
+                            Leaving a live session will result in immediate rating penalty and disconnection from the arena protocols. Confirm termination?
+                        </p>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setShowExitWarning(false)}
+                                className="flex-1 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all text-white"
+                            >
+                                Stay in Combat
+                            </button>
+                            <button
+                                onClick={confirmExit}
+                                className="flex-1 py-4 bg-red-500 hover:bg-red-400 text-black rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
+                            >
+                                Terminate Session
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
