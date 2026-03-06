@@ -366,10 +366,13 @@ export const GameSpace: React.FC = () => {
 
                 // Animate bars after a short delay to ensure modal is rendered
                 setTimeout(() => {
-                    gsap.fromTo('.benchmark-bar',
-                        { width: 0 },
-                        { width: (_i, target) => (target as HTMLElement).dataset.width + '%', duration: 1, ease: 'power2.out', stagger: 0.1 }
-                    );
+                    const bars = document.querySelectorAll('.benchmark-bar');
+                    if (bars.length > 0) {
+                        gsap.fromTo('.benchmark-bar',
+                            { width: 0 },
+                            { width: (_i, target) => (target as HTMLElement).dataset.width + '%', duration: 1, ease: 'power2.out', stagger: 0.1 }
+                        );
+                    }
                 }, 600);
             }, 3500);
         }, 2000);
@@ -382,7 +385,10 @@ export const GameSpace: React.FC = () => {
 
     const handleStartMatch = useCallback(() => {
         setIsRunning(true);
-        gsap.fromTo('.editor-container', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.8 });
+        const container = document.querySelector('.editor-container');
+        if (container) {
+            gsap.fromTo('.editor-container', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.8 });
+        }
     }, []);
 
 

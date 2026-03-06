@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useEffect, useRef, useState, useMemo, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import gsap from 'gsap';
 import { useAuthStore } from '../store/useAuthStore';
@@ -6,128 +6,15 @@ import { useArenaStore } from '../store/useArenaStore';
 import { TournamentHub } from './TournamentHub';
 import { useLayout } from '../components/layout/MainLayout';
 
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import * as THREE from 'three';
 import {
-    Trophy, Zap, Activity, LogOut,
+    Trophy, Zap, Activity,
     Sword, Target,
     ChevronRight,
     Edit2, Moon, Sun,
     Play, Menu, X, Search,
-    Bell, Mail
+    Bell, Mail, Sparkles, Shield, Cpu,
+    Award, TrendingUp
 } from 'lucide-react';
-
-// ── WebGL availability check ──────────────────────────────────────────────
-function isWebGLAvailable(): boolean {
-    try {
-        const canvas = document.createElement('canvas');
-        return !!(
-            (window as Window & typeof globalThis & { WebGLRenderingContext?: unknown }).WebGLRenderingContext &&
-            (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
-        );
-    } catch { return false; }
-}
-
-// ── Error boundary ────────────────────────────────────────────────────────
-interface EBState { hasError: boolean }
-class WebGLErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, EBState> {
-    state: EBState = { hasError: false };
-    static getDerivedStateFromError(): EBState { return { hasError: true }; }
-    componentDidCatch(err: Error, info: ErrorInfo) { console.warn('[WebGL]', err, info); }
-    render() { return this.state.hasError ? this.props.fallback : this.props.children; }
-}
-
-// ── CSS fallback background ───────────────────────────────────────────────
-const CSSBackground: React.FC<{ isLight?: boolean }> = ({ isLight }) => (
-    <div className={`absolute inset-0 overflow-hidden transition-colors duration-500 ${isLight ? 'bg-gray-50' : 'bg-[#020202]'}`}>
-        <div className="absolute inset-0" style={{
-            background: isLight
-                ? 'radial-gradient(ellipse 80% 80% at 20% 30%, rgba(0,0,0,0.03) 0%, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 70%, rgba(0,0,0,0.02) 0%, transparent 60%)'
-                : 'radial-gradient(ellipse 80% 80% at 20% 30%, #111 0%, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 70%, #0d0d0d 0%, transparent 60%)',
-            animation: 'meshPulse 8s ease-in-out infinite alternate',
-        }} />
-        {[
-            { size: 320, x: '10%', y: '20%', delay: '0s', dur: '12s', color: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)' },
-            { size: 480, x: '65%', y: '55%', delay: '3s', dur: '15s', color: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)' },
-            { size: 200, x: '80%', y: '15%', delay: '6s', dur: '10s', color: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)' },
-        ].map((orb, i) => (
-            <div key={i} className="absolute rounded-full pointer-events-none" style={{
-                width: orb.size, height: orb.size, left: orb.x, top: orb.y,
-                background: `radial-gradient(circle, ${orb.color} 0%, transparent 70%)`,
-                animation: `orbFloat ${orb.dur} ${orb.delay} ease-in-out infinite alternate`,
-                filter: 'blur(40px)',
-            }} />
-        ))}
-        <div className={`absolute inset-0 opacity-5`} style={{
-            backgroundImage: isLight
-                ? 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)'
-                : 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
-        }} />
-        <style>{`
-          @keyframes meshPulse { from { opacity: 0.3; } to { opacity: 0.55; } }
-          @keyframes orbFloat { from { transform: translate(0,0) scale(1); } to { transform: translate(20px, -30px) scale(1.08); } }
-        `}</style>
-    </div>
-);
-
-// ── Three.js scene components ─────────────────────────────────────────────
-const LiquidBackground = ({ isLight }: { isLight: boolean }) => {
-    const meshRef = useRef<THREE.Mesh>(null);
-    const { viewport } = useThree();
-    const uniforms = useMemo(() => ({
-        uTime: { value: 0 },
-        uColor1: { value: new THREE.Color(isLight ? '#f3f4f6' : '#000000') },
-        uColor2: { value: new THREE.Color(isLight ? '#e5e7eb' : '#111111') },
-        uColor3: { value: new THREE.Color(isLight ? '#ffffff' : '#0a0a0a') }
-    }), [isLight]);
-
-    useEffect(() => {
-        uniforms.uColor1.value.set(isLight ? '#f3f4f6' : '#000000');
-        uniforms.uColor2.value.set(isLight ? '#e5e7eb' : '#111111');
-        uniforms.uColor3.value.set(isLight ? '#ffffff' : '#0a0a0a');
-    }, [isLight, uniforms]);
-
-    useFrame((state) => {
-        if (meshRef.current) {
-            meshRef.current.rotation.x = state.clock.elapsedTime * 0.05;
-            meshRef.current.rotation.y = state.clock.elapsedTime * 0.03;
-            uniforms.uTime.value = state.clock.elapsedTime;
-        }
-    });
-    return (
-        <mesh ref={meshRef} scale={[viewport.width * 1.5, viewport.height * 1.5, 1]}>
-            <planeGeometry args={[1, 1, 128, 128]} />
-            <shaderMaterial uniforms={uniforms}
-                vertexShader={`varying vec2 vUv; uniform float uTime;
-          vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
-          vec2 mod289(vec2 x){return x-floor(x*(1./289.))*289.;}
-          vec3 permute(vec3 x){return mod289(((x*34.)+1.)*x);}
-          float snoise(vec2 v){
-            const vec4 C=vec4(.211324865405187,.366025403784439,-.577350269189626,.024390243902439);
-            vec2 i=floor(v+dot(v,C.yy));vec2 x0=v-i+dot(i,C.xx);
-            vec2 i1=(x0.x>x0.y)?vec2(1.,0.):vec2(0.,1.);
-            vec4 x12=x0.xyxy+C.xxzz;x12.xy-=i1;i=mod289(i);
-            vec3 p=permute(permute(i.y+vec3(0.,i1.y,1.))+i.x+vec3(0.,i1.x,1.));
-            vec3 m=max(.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.);
-            m=m*m;m=m*m;vec3 x=2.*fract(p*C.www)-1.;vec3 h=abs(x)-.5;
-            vec3 ox=floor(x+.5);vec3 a0=x-ox;
-            m*=1.79284291400159-.85373472095314*(a0*a0+h*h);
-            vec3 g;g.x=a0.x*x0.x+h.x*x0.y;g.yz=a0.yz*x12.xz+h.yz*x12.yw;
-            return 130.*dot(m,g);}
-          void main(){vUv=uv;vec3 pos=position;
-          float noise=snoise(vec2(pos.x*2.+uTime*.1,pos.y*2.+uTime*.1));
-          pos.z+=noise*.1;gl_Position=projectionMatrix*modelViewMatrix*vec4(pos,1.);}`}
-                fragmentShader={`uniform vec3 uColor1,uColor2,uColor3;uniform float uTime;varying vec2 vUv;
-          void main(){vec2 p=vUv;
-          vec3 color=mix(uColor1,uColor2,p.y+sin(uTime*.5)*.1);
-          color=mix(color,uColor3,p.x+cos(uTime*.3)*.1);
-          float grid=step(.98,fract(p.x*20.))+step(.98,fract(p.y*20.));
-          color+=grid*.05;gl_FragColor=vec4(color,1.);}`}
-            />
-        </mesh>
-    );
-};
 
 // ── Leaderboard data ──────────────────────────────────────────────────────
 const INITIAL_LEADERBOARD = [
@@ -141,23 +28,87 @@ const INITIAL_LEADERBOARD = [
     { rank: 8, userId: 'm8', username: 'DataPhantom', rating: 3310, wins: 160, losses: 130, badge: '🎯' },
 ];
 
+// ── Radar Chart Component ─────────────────────────────────────────────────
+const SkillRadar: React.FC<{ isLight: boolean; skills?: { name: string; value: number }[] }> = ({ isLight, skills }) => {
+    const data = useMemo(() => skills || [
+        { name: 'Logic', value: 85 },
+        { name: 'Speed', value: 72 },
+        { name: 'Accuracy', value: 94 },
+        { name: 'Data Struct', value: 65 },
+        { name: 'Complexity', value: 78 },
+    ], [skills]);
+
+    const size = 260;
+    const center = size / 2;
+    const radius = size * 0.35;
+    const angleStep = (Math.PI * 2) / data.length;
+
+    const points = data.map((s, i) => {
+        const x = center + radius * (s.value / 100) * Math.cos(i * angleStep - Math.PI / 2);
+        const y = center + radius * (s.value / 100) * Math.sin(i * angleStep - Math.PI / 2);
+        return `${x},${y}`;
+    }).join(' ');
+
+    const webPoints = [0.2, 0.4, 0.6, 0.8, 1.0].map(level => {
+        return data.map((_, i) => {
+            const x = center + radius * level * Math.cos(i * angleStep - Math.PI / 2);
+            const y = center + radius * level * Math.sin(i * angleStep - Math.PI / 2);
+            return `${x},${y}`;
+        }).join(' ');
+    });
+
+    return (
+        <div className="flex flex-col items-center">
+            <svg width={size} height={size} className="overflow-visible">
+                {webPoints.map((p, i) => (
+                    <polygon key={i} points={p} fill="none" stroke={isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.06)"} strokeWidth="1" />
+                ))}
+                {data.map((_, i) => {
+                    const x = center + radius * Math.cos(i * angleStep - Math.PI / 2);
+                    const y = center + radius * Math.sin(i * angleStep - Math.PI / 2);
+                    return <line key={i} x1={center} y1={center} x2={x} y2={y} stroke={isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)"} />;
+                })}
+                <polygon
+                    points={points}
+                    fill={isLight ? "rgba(0,0,0,0.1)" : "rgba(34,211,238,0.15)"}
+                    stroke={isLight ? "black" : "#22d3ee"}
+                    strokeWidth="2"
+                    className="transition-all duration-1000"
+                />
+                {data.map((s, i) => {
+                    const x = center + (radius + 20) * Math.cos(i * angleStep - Math.PI / 2);
+                    const y = center + (radius + 20) * Math.sin(i * angleStep - Math.PI / 2);
+                    return (
+                        <text
+                            key={i} x={x} y={y} textAnchor="middle" fontSize="7" fontWeight="900"
+                            fill={isLight ? "#000" : "#fff"} className="uppercase tracking-[0.15em] opacity-40 italic"
+                        >
+                            {s.name}
+                        </text>
+                    );
+                })}
+            </svg>
+        </div>
+    );
+};
+
 // ── Tab types ─────────────────────────────────────────────────────────────
 type Tab = 'command' | 'battle' | 'practice' | 'tournaments' | 'history' | 'leaderboard' | 'profile' | 'settings';
 
-// ── Radar Chart Component ─────────────────────────────────────────────────
-
 // ── Main Dashboard ────────────────────────────────────────────────────────
 export const Dashboard: React.FC = () => {
-    const { user, logout, fetchProfile } = useAuthStore();
+    const { user, fetchProfile } = useAuthStore();
     const { fetchProblems, fetchTournaments, fetchLeaderboard, leaderboard } = useArenaStore();
     const navigate = useNavigate();
     const location = useLocation();
     const { isMenuOpen, setIsMenuOpen, isLight, setTheme } = useLayout();
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const notifRef = useRef<HTMLDivElement>(null);
+    const mailRef = useRef<HTMLDivElement>(null);
 
     const getTabFromPath = (path: string): Tab => {
-        const p = path.replace('/', '');
+        const p = path.split('/')[1];
         if (['command', 'battle', 'practice', 'tournaments', 'history', 'leaderboard', 'profile', 'settings'].includes(p)) return p as Tab;
         if (p === 'dashboard') return 'command';
         return 'command';
@@ -167,7 +118,7 @@ export const Dashboard: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showNots, setShowNots] = useState(false);
     const [showMail, setShowMail] = useState(false);
-    const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
 
     const [notifications] = useState([
         { id: 1, text: 'New Tournament starting soon!', time: '5m ago' },
@@ -183,16 +134,30 @@ export const Dashboard: React.FC = () => {
         setActiveTab(getTabFromPath(location.pathname));
     }, [location.pathname]);
 
+    // Close notification/mail dropdowns on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+                setShowNots(false);
+            }
+            if (mailRef.current && !mailRef.current.contains(e.target as Node)) {
+                setShowMail(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     useEffect(() => {
         fetchProfile();
         fetchProblems();
         fetchTournaments();
         fetchLeaderboard();
 
-        const ctx = gsap.context(() => {
-            const elements = document.querySelectorAll('.dash-element');
-            if (elements.length > 0) {
-                gsap.from('.dash-element', {
+        const ctx = gsap.context((self) => {
+            const elements = self.selector?.('.dash-element');
+            if (elements && elements.length > 0) {
+                gsap.from(elements, {
                     y: 30, opacity: 0, duration: 1.2,
                     stagger: 0.08, ease: 'power4.out', delay: 0.15,
                 });
@@ -202,10 +167,10 @@ export const Dashboard: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        const ctx = gsap.context(() => {
-            const panels = document.querySelectorAll('.panel-content');
-            if (panels.length > 0) {
-                gsap.fromTo('.panel-content',
+        const ctx = gsap.context((self) => {
+            const panels = self.selector?.('.panel-content');
+            if (panels && panels.length > 0) {
+                gsap.fromTo(panels,
                     { opacity: 0, y: 16 },
                     { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }
                 );
@@ -238,7 +203,7 @@ export const Dashboard: React.FC = () => {
                 </p>
             </div>
             <div className="flex flex-wrap gap-4">
-                <button onClick={() => setActiveTab('battle')} className={`group relative px-8 py-4 rounded-full font-black uppercase text-xs tracking-[0.2em] overflow-hidden flex items-center gap-3 hover:scale-105 transition-transform ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
+                <button onClick={() => navigate('/battle')} className={`group relative px-8 py-4 rounded-full font-black uppercase text-xs tracking-[0.2em] overflow-hidden flex items-center gap-3 hover:scale-105 transition-transform ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
                     <Zap size={18} fill="currentColor" /> Enter Arena
                 </button>
             </div>
@@ -288,12 +253,73 @@ export const Dashboard: React.FC = () => {
         command: <CommandPanel />,
         battle: <BattlePanel />,
         practice: (
-            <div className="panel-content">
-                <h2 className="text-4xl font-bold tracking-tighter uppercase">Practice Lab</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                    <button onClick={() => navigate('/arena/practice')} className={`p-8 rounded-3xl border ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
-                        <h3 className="text-2xl font-black italic uppercase">Speed Drills</h3>
-                    </button>
+            <div className="panel-content space-y-12">
+                <div className="flex flex-col xl:flex-row gap-12">
+                    <div className="flex-1 space-y-10">
+                        <div className="space-y-2">
+                            <h2 className="text-4xl font-black tracking-tighter uppercase italic">Practice Lab</h2>
+                            <p className={`text-lg font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Adaptive training engine — optimized for skill vector evolution.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[
+                                { title: 'Speed Run Mode', desc: 'Crush high-volume Easy/Medium tasks against a lethal clock.', icon: <Zap size={24} />, mode: 'SPEED' },
+                                { title: 'Deep Focus Mode', desc: 'Complex system architecture problems. Maximum logic precision.', icon: <Target size={24} />, mode: 'FOCUS' },
+                                { title: 'Weakness Fix', desc: 'AI-curated drills targeting your historical failure points.', icon: <Shield size={24} />, mode: 'ADAPTIVE' },
+                                { title: 'AI Coach Mode', desc: 'Real-time complexity analysis and logic optimization hints.', icon: <Sparkles size={24} />, mode: 'COACH' },
+                            ].map((mode, i) => (
+                                <button key={i} onClick={() => navigate('/arena/practice?type=' + mode.mode.toLowerCase())}
+                                    className={`group p-8 rounded-[2.5rem] border text-left transition-all relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10 hover:bg-black/10' : 'bg-white/5 border-white/8 hover:bg-white/10'}`}>
+                                    <div className="flex justify-between items-start mb-8 relative z-10">
+                                        <div className={`p-4 rounded-3xl ${isLight ? 'bg-white shadow-lg' : 'bg-white/10 backdrop-blur-md'}`}>{mode.icon}</div>
+                                        <div className={`text-[10px] font-black uppercase tracking-[0.3em] opacity-30`}>{mode.mode}</div>
+                                    </div>
+                                    <h3 className="text-2xl font-black mb-3 relative z-10 uppercase tracking-tight">{mode.title}</h3>
+                                    <p className={`text-sm font-light leading-relaxed mb-8 relative z-10 ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>{mode.desc}</p>
+                                    <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest relative z-10 group-hover:gap-5 transition-all">
+                                        Initialize <ChevronRight size={14} />
+                                    </div>
+                                    <div className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-10 transition-opacity ${isLight ? 'bg-black' : 'bg-white'}`} />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="w-full xl:w-96 space-y-8">
+                        <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/8'}`}>
+                            <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 whitespace-nowrap">Skill Vector Tracking</div>
+                            <div className="mt-8 scale-110">
+                                <SkillRadar isLight={isLight} />
+                            </div>
+                        </div>
+
+                        <div className={`p-8 rounded-[3rem] border relative overflow-hidden flex flex-col justify-between h-[320px] ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-2 mb-8">
+                                    <Cpu size={16} />
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.4em]">Engine Intelligence</h3>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="space-y-1">
+                                        <div className="text-3xl font-black italic uppercase tracking-tighter">Recommended</div>
+                                        <p className="text-[10px] uppercase font-black opacity-60 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Graphs (Weak Area)
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-4 items-center">
+                                        <div className="px-3 py-1 rounded-full border border-current text-[10px] font-black uppercase tracking-widest opacity-60">Medium</div>
+                                        <div className="text-[10px] font-black uppercase tracking-widest opacity-40">15 MIN CHALLENGE</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={() => navigate('/arena/practice')} className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.25em] transition-all relative z-10 ${isLight ? 'bg-white text-black hover:scale-[0.98]' : 'bg-black text-white hover:scale-[0.98]'}`}>
+                                Launch Drill
+                            </button>
+                            <div className="absolute top-0 right-0 -mr-20 -mt-20 opacity-10">
+                                <Activity size={300} strokeWidth={4} />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         ),
@@ -323,18 +349,166 @@ export const Dashboard: React.FC = () => {
             </div>
         ),
         profile: (
-            <div className="panel-content">
-                <h2 className="text-4xl font-bold tracking-tighter uppercase">Operator DNS</h2>
-                <div className={`mt-8 p-12 rounded-[3rem] border ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
-                    <div className="flex flex-col md:flex-row gap-12 items-center">
-                        <div className="w-32 h-32 rounded-[2rem] bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-black font-black text-5xl">
-                            {user?.username?.[0]}
+            <div className="panel-content space-y-10">
+                <div className="flex justify-between items-end">
+                    <div>
+                        <h2 className="text-4xl font-black tracking-tighter uppercase italic">Operator DNA</h2>
+                        <p className={`text-lg font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Protocol Clearance: Level 42 — Master Architect</p>
+                    </div>
+                    <button
+                        onClick={() => setIsEditingProfile(!isEditingProfile)}
+                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${isEditingProfile ? (isLight ? 'bg-black text-white border-black' : 'bg-white text-black border-white') : (isLight ? 'bg-black/5 hover:bg-black/10 border-black/10' : 'bg-white/5 hover:bg-white/10 border-white/10')}`}
+                    >
+                        {isEditingProfile ? 'Save Local' : 'Edit Sector'}
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Left Col: Core Stats & Avatar */}
+                    <div className="lg:col-span-4 space-y-8">
+                        <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden ${isLight ? 'bg-black text-white shadow-2xl' : 'bg-white text-black shadow-white/5 shadow-2xl skew-y-1'}`}>
+                            <div className="relative group cursor-pointer mb-8">
+                                <div className={`w-32 h-32 rounded-[2.5rem] bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center font-black text-5xl transition-transform group-hover:scale-105 duration-500`}>
+                                    {user?.username?.[0].toUpperCase()}
+                                </div>
+                                {isEditingProfile && (
+                                    <div className="absolute inset-0 bg-black/40 rounded-[2.5rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Edit2 size={24} className="text-white" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-center space-y-2">
+                                <h3 className="text-3xl font-black italic tracking-tighter uppercase">{user?.username}</h3>
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-40">Active Instance // US-EAST-1</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 w-full mt-10">
+                                <div className="text-center p-4 border border-current rounded-2xl opacity-40">
+                                    <p className="text-2xl font-black tracking-tighter">{user?.rating}</p>
+                                    <p className="text-[8px] font-black uppercase tracking-widest mt-1">Global RP</p>
+                                </div>
+                                <div className="text-center p-4 border border-current rounded-2xl opacity-40">
+                                    <p className="text-2xl font-black tracking-tighter">Gold II</p>
+                                    <p className="text-[8px] font-black uppercase tracking-widest mt-1">Tier Class</p>
+                                </div>
+                            </div>
                         </div>
-                        <div className="space-y-4 flex-1">
-                            <h3 className="text-5xl font-black italic tracking-tighter uppercase">{user?.username}</h3>
-                            <div className="flex gap-4">
-                                <p className="px-4 py-1.5 rounded-full border border-current text-[10px] font-black uppercase tracking-widest opacity-60">Master Tier III</p>
-                                <p className="px-4 py-1.5 rounded-full border border-current text-[10px] font-black uppercase tracking-widest opacity-60">{user?.rating} RP</p>
+
+                        {/* Recent Performance Snapshot */}
+                        <div className={`p-8 rounded-[2.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 border-b border-current pb-4">Performance Vectors</h4>
+                            <div className="mt-4">
+                                <SkillRadar isLight={isLight} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-8">
+                                <div className="p-4 rounded-2xl bg-black/5 text-center">
+                                    <p className="text-xl font-black uppercase">94%</p>
+                                    <p className="text-[8px] font-black opacity-30">Accuracy</p>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-black/5 text-center">
+                                    <p className="text-xl font-black uppercase">4.2s</p>
+                                    <p className="text-[8px] font-black opacity-30">Avg Load</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Col: Details / History / Achievements */}
+                    <div className="lg:col-span-8 space-y-8">
+                        {/* Summary & Achievements */}
+                        <div id="achievements" className={`p-10 rounded-[3.5rem] border relative overflow-hidden ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-10">Milestone achievements</h4>
+                            <div className="flex flex-wrap gap-4">
+                                {[
+                                    { icon: <Zap size={20} />, label: 'Blitz Master', color: 'bg-yellow-500/20 text-yellow-500' },
+                                    { icon: <Award size={20} />, label: 'Algorithm Elite', color: 'bg-cyan-500/20 text-cyan-500' },
+                                    { icon: <Shield size={20} />, label: 'Bug Crusher', color: 'bg-green-500/20 text-green-500' },
+                                    { icon: <TrendingUp size={20} />, label: 'Top 1% Growth', color: 'bg-purple-500/20 text-purple-500' },
+                                    { icon: <Trophy size={20} />, label: 'Season III Champ', color: 'bg-blue-500/20 text-blue-500' },
+                                ].map((badge, i) => (
+                                    <div key={i} className={`group relative p-4 rounded-3xl border border-current w-32 h-32 flex flex-col items-center justify-center gap-2 transition-all hover:scale-105 cursor-help ${badge.color}`}>
+                                        {badge.icon}
+                                        <p className="text-[9px] font-black uppercase text-center tracking-tighter leading-tight">{badge.label}</p>
+                                        <div className="absolute inset-0 bg-current opacity-0 group-hover:opacity-5 rounded-3xl transition-opacity" />
+                                    </div>
+                                ))}
+                                <div className="p-4 rounded-3xl border border-dashed border-gray-500 w-32 h-32 flex items-center justify-center opacity-30">
+                                    <span className="text-[8px] font-black text-center">+12 More Locked</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recent Battle History (Scores) */}
+                        <div id="logs" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 flex justify-between">
+                                <span>Recent combat logs</span>
+                                <span className="opacity-40 italic">Uplink Stable</span>
+                            </h4>
+                            <div className="space-y-4">
+                                {[
+                                    { vs: 'NeonShadow_X', date: '3m ago', rp: '+42', result: 'VICTORY', accuracy: '98%', difficulty: 'HARD' },
+                                    { vs: 'Null_Pointer', date: '2h ago', rp: '-12', result: 'DEFEAT', accuracy: '82%', difficulty: 'MEDIUM' },
+                                    { vs: 'Byte_Me', date: '1d ago', rp: '+25', result: 'VICTORY', accuracy: '94%', difficulty: 'EASY' }
+                                ].map((log, i) => (
+                                    <div key={i} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all hover:bg-white/5 border border-transparent hover:border-white/10`}>
+                                        <div className="flex items-center gap-6">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${log.result === 'VICTORY' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                                                {log.vs[0]}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-lg font-black italic uppercase tracking-tighter">vs {log.vs}</span>
+                                                    <span className="text-[8px] font-black px-1.5 py-0.5 bg-white/10 rounded uppercase opacity-50 tracking-widest">{log.difficulty}</span>
+                                                </div>
+                                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mt-1">Accuracy: {log.accuracy} // {log.date}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={`text-xl font-black ${log.rp.startsWith('+') ? 'text-cyan-400' : 'text-red-400'}`}>{log.rp} RP</p>
+                                            <p className="text-[8px] font-black uppercase tracking-widest opacity-40 tracking-tighter mt-1">Net Gain</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => { setActiveTab('history'); navigate('/history'); }}
+                                className="w-full mt-10 py-5 rounded-[2rem] border border-dashed border-gray-500/30 text-[9px] font-black uppercase tracking-[0.3em] opacity-40 hover:opacity-100 hover:border-gray-500 transition-all font-black"
+                            >
+                                View Full Combat Archive
+                            </button>
+                        </div>
+
+                        {/* Account Config (Editing Area) */}
+                        <div id="config" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-black text-white' : 'bg-white/5 border-white/10'}`}>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-10">Neural Interface configuration</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator ID</label>
+                                        {isEditingProfile ? (
+                                            <input type="text" defaultValue={user?.username} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
+                                        ) : (
+                                            <p className="text-lg font-black italic tracking-tighter">{user?.username || 'GUEST_OPERATOR'}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Uplink Email</label>
+                                        {isEditingProfile ? (
+                                            <input type="email" defaultValue={user?.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
+                                        ) : (
+                                            <p className="text-lg font-black italic tracking-tighter truncate">{user?.email || 'N/A'}</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator Bio // System Motto</label>
+                                        {isEditingProfile ? (
+                                            <textarea rows={3} className="w-full bg-white/5 border border-white/20 rounded-2xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none resize-none" defaultValue="Evolved logic. Absolute precision. The void awaits." />
+                                        ) : (
+                                            <p className="text-xs font-light tracking-wide leading-relaxed italic opacity-80">"Evolved logic. Absolute precision. The void awaits."</p>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -366,24 +540,9 @@ export const Dashboard: React.FC = () => {
 
     return (
         <div className={`relative h-screen w-full transition-colors duration-500 flex flex-col ${isLight ? 'bg-gray-50 text-black' : 'bg-transparent text-white'}`} ref={containerRef}>
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                <WebGLErrorBoundary fallback={<CSSBackground isLight={isLight} />}>
-                    {isWebGLAvailable() ? (
-                        <div className="h-full w-full">
-                            <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
-                                <ambientLight intensity={0.5} />
-                                <pointLight position={[10, 10, 10]} intensity={1} />
-                                <LiquidBackground isLight={isLight} />
-                            </Canvas>
-                        </div>
-                    ) : <CSSBackground isLight={isLight} />}
-                </WebGLErrorBoundary>
-                <div className={`absolute inset-0 pointer-events-none bg-gradient-to-r transition-all duration-500 ${isLight ? 'from-white via-white/40 to-transparent' : 'from-black via-black/60 to-transparent'}`} />
-            </div>
-
             <div className={`flex-1 overflow-y-auto px-6 md:px-12 py-8 relative z-10 custom-scrollbar`}>
                 <div className="w-full">
-                    <header className="mb-12 flex justify-between items-center">
+                    <header className="mb-12 flex justify-between items-center relative z-50">
                         <div className="flex items-center gap-6 flex-shrink-0">
                             <button
                                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -429,13 +588,13 @@ export const Dashboard: React.FC = () => {
                                 {isLight ? <Moon size={20} /> : <Sun size={20} />}
                             </button>
 
-                            <div className="relative">
-                                <button onClick={() => setShowNots(!showNots)} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
+                            <div className="relative" ref={notifRef}>
+                                <button onClick={() => { setShowNots(!showNots); setShowMail(false); }} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
                                     <Bell size={20} />
                                     <span className="absolute top-3 right-3 w-4 h-4 bg-red-500 border-2 border-black rounded-full text-[8px] font-black flex items-center justify-center">2</span>
                                 </button>
                                 {showNots && (
-                                    <div className={`absolute top-16 right-0 w-80 rounded-3xl p-6 shadow-3xl z-50 border backdrop-blur-3xl animate-in zoom-in-95 duration-200 ${isLight ? 'bg-white/98 border-black/10' : 'bg-[#0a0a0a]/98 border-white/10'}`}>
+                                    <div className={`absolute top-16 right-0 w-80 rounded-3xl p-6 shadow-3xl z-50 border animate-in zoom-in-95 duration-200 ${isLight ? 'bg-white border-black/10 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl shadow-black/50'}`}>
                                         <div className="flex items-center justify-between mb-6">
                                             <h3 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-cyan-500'}`}>Intelligence Feed</h3>
                                         </div>
@@ -451,13 +610,13 @@ export const Dashboard: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="relative">
-                                <button onClick={() => setShowMail(!showMail)} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
+                            <div className="relative" ref={mailRef}>
+                                <button onClick={() => { setShowMail(!showMail); setShowNots(false); }} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
                                     <Mail size={20} />
                                     <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-cyan-500 border-2 border-black rounded-full animate-pulse" />
                                 </button>
                                 {showMail && (
-                                    <div className={`absolute top-16 right-0 w-80 rounded-3xl p-6 shadow-3xl z-50 border backdrop-blur-3xl animate-in zoom-in-95 duration-200 ${isLight ? 'bg-white/98 border-black/10' : 'bg-[#0a0a0a]/98 border-white/10'}`}>
+                                    <div className={`absolute top-16 right-0 w-80 rounded-3xl p-6 shadow-3xl z-50 border animate-in zoom-in-95 duration-200 ${isLight ? 'bg-white border-black/10 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl shadow-black/50'}`}>
                                         <div className="flex items-center justify-between mb-6">
                                             <h3 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-cyan-500'}`}>Secure Uplink</h3>
                                         </div>
@@ -478,7 +637,7 @@ export const Dashboard: React.FC = () => {
 
                             <div className="relative ml-2">
                                 <button
-                                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                                    onClick={() => navigate('/profile')}
                                     className={`flex items-center gap-3 pl-3 pr-2 py-2 rounded-2xl border transition-all ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
                                 >
                                     <div className="flex flex-col items-end hidden sm:block">
@@ -492,29 +651,6 @@ export const Dashboard: React.FC = () => {
                                         {(user?.username || 'G')[0].toUpperCase()}
                                     </div>
                                 </button>
-                                {showProfileMenu && (
-                                    <div className={`absolute top-16 right-0 w-72 rounded-[2.5rem] p-6 shadow-3xl z-50 border backdrop-blur-3xl animate-in zoom-in-95 duration-300 ${isLight ? 'bg-white/98 border-black/10' : 'bg-[#0a0a0a]/98 border-white/10'}`}>
-                                        <div className="flex items-center gap-4 mb-8">
-                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-black font-black text-xl">
-                                                {(user?.username || 'G')[0].toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="text-lg font-black italic uppercase tracking-tighter leading-none">{user?.username}</p>
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-500 mt-1">{user?.rating} RP</p>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-4">
-                                            <button onClick={() => { setActiveTab('profile'); setShowProfileMenu(false); }} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}>
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Edit DNA</span>
-                                                <Edit2 size={14} className="opacity-40" />
-                                            </button>
-                                            <button onClick={() => { logout(); navigate('/login'); }} className="w-full flex items-center justify-between p-4 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-all">
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Terminate</span>
-                                                <LogOut size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </header>

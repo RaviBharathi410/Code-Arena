@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { BattleArena } from './views/BattleArena';
 import { Login } from './views/Login';
 import { Dashboard } from './views/Dashboard';
@@ -19,127 +19,29 @@ function App() {
             <Routes>
                 <Route path="/login" element={<Login />} />
 
-                {/* Protected Routes wrapped in MainLayout */}
+                {/* All Protected Routes sharing MainLayout */}
                 <Route
-                    path="/dashboard"
                     element={
                         <ProtectedRoute>
                             <MainLayout>
-                                <Dashboard />
+                                <Outlet />
                             </MainLayout>
                         </ProtectedRoute>
                     }
-                />
-                <Route
-                    path="/battle"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/practice"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/history"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/opponents"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <OpponentSelection />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/arena/solo"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <GameSpace />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/arena/practice"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <GameSpace />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/arena/:matchId"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <BattleArena />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/tournaments"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/leaderboard"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/profile"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/settings"
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout>
-                                <Dashboard />
-                            </MainLayout>
-                        </ProtectedRoute>
-                    }
-                />
+                >
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/battle" element={<Dashboard />} />
+                    <Route path="/practice" element={<Dashboard />} />
+                    <Route path="/history" element={<Dashboard />} />
+                    <Route path="/tournaments" element={<Dashboard />} />
+                    <Route path="/leaderboard" element={<Dashboard />} />
+                    <Route path="/profile" element={<Dashboard />} />
+                    <Route path="/settings" element={<Dashboard />} />
+                    <Route path="/opponents" element={<OpponentSelection />} />
+                    <Route path="/arena/solo" element={<GameSpace />} />
+                    <Route path="/arena/practice" element={<GameSpace />} />
+                    <Route path="/arena/:matchId" element={<BattleArena />} />
+                </Route>
 
                 <Route path="/demo" element={<DemoOne />} />
                 <Route path="/" element={<Navigate to="/dashboard" />} />

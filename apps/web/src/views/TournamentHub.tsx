@@ -82,10 +82,10 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
     useEffect(() => {
         if (filteredTournaments.length === 0) return;
 
-        const ctx = gsap.context(() => {
-            const cards = document.querySelectorAll('.tournament-card');
-            if (cards.length > 0) {
-                gsap.from('.tournament-card', {
+        const ctx = gsap.context((self) => {
+            const cards = self.selector?.('.tournament-card');
+            if (cards && cards.length > 0) {
+                gsap.from(cards, {
                     y: 30,
                     opacity: 0,
                     duration: 0.8,

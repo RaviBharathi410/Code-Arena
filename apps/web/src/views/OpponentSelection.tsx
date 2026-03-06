@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
-import { Activity, Users, Shield, Zap, Target, Search, Menu } from 'lucide-react';
+import { Users, Shield, Zap, Target, Search, Menu } from 'lucide-react';
 import { useLayout } from '../components/layout/MainLayout';
 
 const OPPONENTS = [
@@ -18,23 +18,29 @@ export const OpponentSelection: React.FC = () => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     useEffect(() => {
-        const ctx = gsap.context(() => {
-            gsap.from('.header-element', {
-                y: -30,
-                opacity: 0,
-                duration: 0.8,
-                stagger: 0.1,
-                ease: 'power3.out'
-            });
+        const ctx = gsap.context((self) => {
+            const headerElements = self.selector?.('.header-element');
+            if (headerElements && headerElements.length > 0) {
+                gsap.from(headerElements, {
+                    y: -30,
+                    opacity: 0,
+                    duration: 0.8,
+                    stagger: 0.1,
+                    ease: 'power3.out'
+                });
+            }
 
-            gsap.from('.opponent-card', {
-                y: 30,
-                opacity: 0,
-                duration: 0.8,
-                stagger: 0.1,
-                ease: 'power3.out',
-                delay: 0.3
-            });
+            const cards = self.selector?.('.opponent-card');
+            if (cards && cards.length > 0) {
+                gsap.from(cards, {
+                    y: 30,
+                    opacity: 0,
+                    duration: 0.8,
+                    stagger: 0.1,
+                    ease: 'power3.out',
+                    delay: 0.3
+                });
+            }
         }, containerRef);
 
         return () => ctx.revert();
@@ -73,12 +79,8 @@ export const OpponentSelection: React.FC = () => {
     };
 
     return (
-        <div ref={containerRef} className="h-screen w-full bg-[#020202] text-white flex flex-col relative overflow-hidden">
+        <div ref={containerRef} className="h-screen w-full bg-transparent text-white flex flex-col relative overflow-hidden">
             <div className="flex-1 flex flex-col px-4 md:px-8 py-8 lg:py-12 relative z-10 overflow-y-auto custom-scrollbar">
-                {/* Background noise/gradient */}
-                <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0a] to-[#020202] pointer-events-none" />
-                <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-white/5 rounded-full blur-[120px] pointer-events-none transform translate-x-1/3 -translate-y-1/3" />
-                <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-white/5 rounded-full blur-[100px] pointer-events-none transform -translate-x-1/2 translate-y-1/3" />
 
                 <header className="relative z-10 mb-16 header-element">
                     <div className="flex items-center gap-6 mb-4">
