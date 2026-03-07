@@ -1,17 +1,9 @@
-import { Router } from 'express';
-import { db } from '../db';
+import { db } from '../../db';
 import { leaderboard, users } from '@arena/database';
-import { desc } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
-import { authMiddleware } from '../middleware/auth';
+import { desc, eq } from 'drizzle-orm';
 
-const router = Router();
-
-// GET /api/leaderboard — get global leaderboard sorted by rating
-router.get('/', authMiddleware, async (req: any, res) => {
-    try {
-        const limit = parseInt(req.query.limit as string) || 50;
-
+export class LeaderboardService {
+    async getRankings(limit: number = 50) {
         // Join leaderboard with users to get usernames
         const rankings = await db
             .select({
@@ -45,17 +37,14 @@ router.get('/', authMiddleware, async (req: any, res) => {
                 .limit(limit)
                 .all();
 
-            return res.json(fallbackRankings.map((u, i) => ({
+            return fallbackRankings.map((u, i) => ({
                 ...u,
                 rank: i + 1,
-            })));
+            }));
         }
 
-        res.json(rankings);
-    } catch (err) {
-        console.error('Error fetching leaderboard:', err);
-        res.status(500).json({ message: 'Error fetching leaderboard' });
+        return rankings;
     }
-});
+}
 
-export default router;
+export const leaderboardService = new LeaderboardService();

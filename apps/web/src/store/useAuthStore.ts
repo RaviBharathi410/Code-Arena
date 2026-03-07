@@ -5,13 +5,13 @@ import type { User } from '../types';
 
 interface AuthState {
     user: User | null;
-    token: string | null;
+    token: string | null;        // access token – stored in memory only
     isAuthenticated: boolean;
     authLoading: boolean;
     authError: string | null;
 
-    setAuth: (user: User, token: string) => void;
-    logout: () => void;
+    setAuth: (user: User, accessToken: string) => void;
+    logout: () => Promise<void>;
     fetchProfile: () => Promise<void>;
 }
 
@@ -24,21 +24,26 @@ export const useAuthStore = create<AuthState>()(
             authLoading: false,
             authError: null,
 
-            setAuth: (user: User, token: string) => set({
+            setAuth: (user: User, accessToken: string) => set({
                 user: { ...user },
-                token,
+                token: accessToken,
                 isAuthenticated: true,
                 authLoading: false,
                 authError: null,
             }),
 
-            logout: () => set({
-                user: null,
-                token: null,
-                isAuthenticated: false,
-                authLoading: false,
-                authError: null,
-            }),
+            logout: async () => {
+                try {
+                    await api.post('/auth/logout');
+                } catch (_) { /* ignore network errors on logout */ }
+                set({
+                    user: null,
+                    token: null,
+                    isAuthenticated: false,
+                    authLoading: false,
+                    authError: null,
+                });
+            },
 
             fetchProfile: async () => {
                 const token = get().token;
@@ -46,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
 
                 set({ authLoading: true, authError: null });
                 try {
-                    const response = await api.get('/auth/me');
+                    const response = await api.get('/users/me');
                     set({ user: response.data, authLoading: false });
                 } catch (error: any) {
                     const message = error.response?.data?.message || error.message || 'Failed to fetch profile';

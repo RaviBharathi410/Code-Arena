@@ -1,7 +1,8 @@
 import { Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { config } from '../config';
 
-interface CustomSocket extends Socket {
+export interface CustomSocket extends Socket {
     user?: {
         id: string;
         username: string;
@@ -16,7 +17,7 @@ export const socketAuthMiddleware = (socket: CustomSocket, next: (err?: Error) =
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { id: string; username: string };
+        const decoded = jwt.verify(token, config.jwtSecret) as { id: string; username: string };
         socket.user = decoded;
         next();
     } catch (err) {

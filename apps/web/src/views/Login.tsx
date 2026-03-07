@@ -9,13 +9,14 @@ import {
 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
 
     const { goToDashboard } = useNav();
     const setAuth = useAuthStore((state) => state.setAuth);
@@ -37,12 +38,17 @@ export const Login: React.FC = () => {
     }, [isLogin]);
 
     const validate = () => {
-        if (!email) return 'Email is required';
-        if (isLogin && !email.includes('@') && !/^[a-zA-Z0-0_]+$/.test(email)) return 'Invalid email or username format';
-        if (!isLogin && !email.includes('@')) return 'Please enter a valid email address';
-        if (!password) return 'Password is required';
-        if (password.length < 6) return 'Password must be at least 6 characters';
-        if (!isLogin && !username) return 'Username is required';
+        if (isLogin) {
+            if (!identifier) return 'Email or username is required';
+            if (!password) return 'Password is required';
+        } else {
+            if (!email.includes('@')) return 'Please enter a valid email address';
+            if (!password) return 'Password is required';
+            if (password.length < 8) return 'Password must be at least 8 characters';
+            if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter';
+            if (!/[0-9]/.test(password)) return 'Password must contain a number';
+            if (!username) return 'Username is required';
+        }
         return null;
     };
 
@@ -61,21 +67,18 @@ export const Login: React.FC = () => {
         setError(null);
 
         try {
-            const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-            const payload = isLogin
-                ? { email, password }
-                : { email, password, username };
-
-            const response = await api.post(endpoint, payload);
-
-            // 3. Success: setAuth and goToDashboard
-            setAuth(response.data.user, response.data.token);
+            if (isLogin) {
+                const response = await api.post('/auth/login', { identifier, password });
+                setAuth(response.data.user, response.data.accessToken);
+            } else {
+                const response = await api.post('/auth/register', { username, email, password });
+                setAuth(response.data.user, response.data.accessToken);
+            }
             goToDashboard();
         } catch (err: any) {
-            // 4. Failure: set error, reset password field
             const msg = err.response?.data?.message || 'Authentication failed. Please check your uplink.';
             setError(msg);
-            setPassword(''); // Security/UX: clear password on fail
+            setPassword('');
         } finally {
             setLoading(false);
         }
@@ -85,11 +88,12 @@ export const Login: React.FC = () => {
         setIsLogin(!isLogin);
         setError(null);
         setEmail('');
+        setIdentifier('');
         setPassword('');
         setUsername('');
     };
 
-    const isSubmitDisabled = loading || !email || !password || (!isLogin && !username);
+    const isSubmitDisabled = loading || (isLogin ? (!identifier || !password) : (!email || !password || !username));
 
     return (
         <div ref={containerRef} className="relative min-h-screen w-full bg-[#020202] text-white overflow-hidden flex items-center justify-center selection:bg-white selection:text-black">
@@ -180,8 +184,8 @@ export const Login: React.FC = () => {
                             <input
                                 type="text"
                                 placeholder={isLogin ? 'operator@nexus.io or alias' : 'operator@nexus.io'}
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                value={isLogin ? identifier : email}
+                                onChange={(e) => isLogin ? setIdentifier(e.target.value) : setEmail(e.target.value)}
                                 disabled={loading}
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             />

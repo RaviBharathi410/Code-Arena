@@ -475,7 +475,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 {recentMatchesData.length === 0 && !isLoading && (
                                     <p className="text-xs opacity-40 italic">No recent combat logs found in this sector.</p>
                                 )}
-                                {recentMatchesData.map((log, i) => (
+                                {recentMatchesData.map((log) => (
                                     <div key={log.id} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all hover:bg-white/5 border border-transparent hover:border-white/10`}>
                                         <div className="flex items-center gap-6">
                                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${log.status === 'completed' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>

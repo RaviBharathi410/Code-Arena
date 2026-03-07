@@ -37,8 +37,8 @@ const NO_LAYOUT_PAGES = new Set<PageId>([PAGES.LOGIN]);
 // ── NavigatorRoot ─────────────────────────────────────────────────────────
 
 const NavigatorRoot: React.FC = () => {
-    const { currentPage } = useNav();
-    const { isAuthenticated } = useAuthStore();
+    const { currentPage, params } = useNav();
+    const { isAuthenticated, user } = useAuthStore();
 
     // Auth guard: redirect to login if not authenticated and page is protected
     if (!PUBLIC_PAGES.has(currentPage) && !isAuthenticated) {
@@ -50,15 +50,12 @@ const NavigatorRoot: React.FC = () => {
         return <Navigate to="/dashboard" replace />;
     }
 
-    const { user } = useAuthStore();
     const PageComponent = PAGE_MAP[currentPage] ?? PAGE_MAP[PAGES.DASHBOARD];
 
     // Render with or without layout
     if (NO_LAYOUT_PAGES.has(currentPage)) {
         return <PageComponent />;
     }
-
-    const { params } = useNav();
 
     return (
         <MainLayout>

@@ -1,55 +1,45 @@
 import express from 'express';
-import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import { authMiddleware } from './middleware/auth';
-import { socketAuthMiddleware } from './middleware/socketAuth';
-import authRoutes from './routes/auth';
-import problemRoutes from './routes/problems';
-import matchRoutes from './routes/matches';
-import leaderboardRoutes from './routes/leaderboard';
-import tournamentRoutes from './routes/tournaments';
-import { battleService } from './services/battle';
+import cookieParser from 'cookie-parser';
+import { apiLimiter, authLimiter } from './middleware/rateLimiter';
 
-dotenv.config();
+import authRoutes from './modules/auth/auth.router';
+import userRoutes from './modules/users/users.router';
+import problemRoutes from './modules/problems/problems.router';
+import matchRoutes from './modules/matches/matches.router';
+import leaderboardRoutes from './modules/leaderboard/leaderboard.router';
+import tournamentRoutes from './modules/tournaments/tournaments.router';
 
-const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
+export const createApp = () => {
+    const app = express();
 
-app.use(cors());
-app.use(express.json());
+    // Standard Middlewares
+    app.use(cors({
+        origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+        credentials: true,
+    }));
+    app.use(express.json());
+    app.use(cookieParser());
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/problems', problemRoutes);
-app.use('/api/matches', matchRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/tournaments', tournamentRoutes);
+    // Security: Global Rate Limiting
+    app.use('/api', apiLimiter);
 
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', message: 'Battle Arena Backend is running' });
-});
-
-// Real-time Battle Engine
-io.use(socketAuthMiddleware);
-battleService.initialize(io);
-
-io.on('connection', (socket: any) => {
-    console.log('User connected:', socket.id, 'User:', socket.user?.username);
-
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
+    // Health check
+    app.get('/health', (req, res) => {
+        res.json({ status: 'ok', message: 'Arena Intelligence Uplink Active' });
     });
-});
 
-const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+    // Routes
+    // Apply strict limiting specifically to auth endpoints
+    app.use('/api/auth/login', authLimiter);
+    app.use('/api/auth/register', authLimiter);
+
+    app.use('/api/auth', authRoutes);
+    app.use('/api/users', userRoutes);
+    app.use('/api/problems', problemRoutes);
+    app.use('/api/matches', matchRoutes);
+    app.use('/api/leaderboard', leaderboardRoutes);
+    app.use('/api/tournaments', tournamentRoutes);
+
+    return app;
+};
