@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { authService } from './auth.service';
 import { registerSchema, loginSchema } from './auth.schema';
+import { logger } from '../../lib/logger';
 
 export class AuthController {
     async register(req: Request, res: Response) {

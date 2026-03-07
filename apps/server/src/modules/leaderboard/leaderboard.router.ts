@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { leaderboardController } from './leaderboard.controller';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { requireAuth } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-router.get('/', authMiddleware, leaderboardController.getRankings);
+router.get('/', leaderboardController.getRankings);
+router.get('/me', requireAuth, leaderboardController.getMe);
 
 export default router;

@@ -5,6 +5,7 @@ import { db } from '../../db';
 import { users, refreshTokens } from '@arena/database';
 import { eq, or } from 'drizzle-orm';
 import { env } from '../../config/env';
+import { logger } from '../../lib/logger';
 
 export class AuthService {
     async register(userData: { username: string; email: string; password: string }) {
@@ -103,7 +104,8 @@ export class AuthService {
             const { refreshToken } = await this.generateRefreshToken(user.id);
 
             return { accessToken, refreshToken };
-        } catch (err) {
+        } catch (err: any) {
+            logger.error({ err: err.message, stack: err.stack }, 'Refresh token verification failed');
             throw new Error('Unauthorized');
         }
     }
@@ -157,7 +159,7 @@ export class AuthService {
                 type: 'access'
             },
             env.JWT_SECRET,
-            { expiresIn: env.JWT_EXPIRES_IN }
+            { expiresIn: env.JWT_EXPIRES_IN as any }
         );
     }
 
@@ -166,7 +168,7 @@ export class AuthService {
         const refreshToken = jwt.sign(
             { sub: userId, tokenId, type: 'refresh' },
             env.JWT_SECRET,
-            { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
+            { expiresIn: env.JWT_REFRESH_EXPIRES_IN as any }
         );
 
         // Store hashed token for rotation/revocation

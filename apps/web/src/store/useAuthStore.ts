@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
 
                 set({ authLoading: true, authError: null });
                 try {
-                    const response = await api.get('/users/me');
+                    const response = await api.get('/auth/me');
                     set({ user: response.data, authLoading: false });
                 } catch (error: any) {
                     const message = error.response?.data?.message || error.message || 'Failed to fetch profile';

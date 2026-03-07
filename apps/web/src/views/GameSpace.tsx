@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { useNav } from '../navigation/NavigationContext';
 import gsap from 'gsap';
 import { useMatch } from '../contexts/MatchContext';
+import { useSocket } from '../contexts/SocketContext';
 import { useVoiceCommand } from '../hooks/useVoiceCommand';
 import { VoiceVisualizer } from '../components/ui/VoiceVisualizer';
 import {
@@ -91,8 +92,9 @@ export const GameSpace: React.FC = () => {
     const { setIsMenuOpen } = useLayout();
     const isPractice = currentPage === 'arena_practice' || navParams.practiceType != null;
 
+    const { connect } = useSocket();
     const {
-        connectSocket, joinMatch, updateCode: syncCode,
+        joinMatch, updateCode: syncCode,
         problem: activeProblem, winner,
         opponentCode: liveOpponentCode, submitCode: socketSubmit
     } = useMatch();
@@ -132,14 +134,14 @@ export const GameSpace: React.FC = () => {
 
     // Initial State Setup
     useEffect(() => {
-        connectSocket();
+        connect();
 
         // If we have a matchId in nav params
         const matchId = navParams.matchId;
         if (matchId) {
             joinMatch(matchId);
         }
-    }, [navParams.matchId, connectSocket, joinMatch]);
+    }, [navParams.matchId, connect, joinMatch]);
 
     useEffect(() => {
         if (activeProblem) {
@@ -317,10 +319,6 @@ export const GameSpace: React.FC = () => {
 
             // Show real-time score impact preview before the final result modal
             setShowScoreImpact(true);
-            gsap.fromTo('.score-impact-panel',
-                { y: 50, opacity: 0 },
-                { y: 0, opacity: 1, duration: 0.5, ease: 'back.out' }
-            );
 
             // Wait a bit to show the modal
             setTimeout(() => {
@@ -412,6 +410,16 @@ export const GameSpace: React.FC = () => {
             setShowResults(true);
         }
     }, [winner]);
+
+    // Animation for score impact toast
+    useEffect(() => {
+        if (showScoreImpact) {
+            gsap.fromTo('.score-impact-panel',
+                { y: 50, opacity: 0 },
+                { y: 0, opacity: 1, duration: 0.5, ease: 'back.out' }
+            );
+        }
+    }, [showScoreImpact]);
 
     return (
         <div className="h-screen bg-[#020202] text-white flex flex-col font-sans selection:bg-white selection:text-black overflow-hidden" ref={containerRef}>
@@ -575,7 +583,7 @@ export const GameSpace: React.FC = () => {
 
                     {/* Score Impact Toast */}
                     {showScoreImpact && (
-                        <div className="absolute bottom-10 right-10 z-30 p-6 rounded-3xl bg-black border border-green-500/50 shadow-[0_0_40px_rgba(34,197,94,0.2)] animate-in slide-in-from-bottom-5 duration-500">
+                        <div className="absolute bottom-10 right-10 z-30 p-6 rounded-3xl bg-black border border-green-500/50 shadow-[0_0_40px_rgba(34,197,94,0.2)] animate-in slide-in-from-bottom-5 duration-500 score-impact-panel">
                             <div className="flex items-center gap-2 text-green-500 mb-2">
                                 <Zap size={16} fill="currentColor" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Score Prediction</span>

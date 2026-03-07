@@ -8,7 +8,7 @@ import { useLayout } from '../components/layout/MainLayout';
 import { User } from '../types';
 
 export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
-    const { goToBattle } = useNav();
+    const { goToArenaMatch } = useNav();
     const { setIsMenuOpen } = useLayout();
     const { connect, connected, on, emit } = useSocket();
 
@@ -35,12 +35,15 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
         const cleanupJoined = on(SERVER_EVENTS.USER_JOINED, (user: any) => setOnlineUsers(prev => [...prev.filter(u => u.id !== user.id), user]));
         const cleanupLeft = on(SERVER_EVENTS.USER_LEFT, ({ id }: { id: string }) => setOnlineUsers(prev => prev.filter(u => u.id !== id)));
         const cleanupMatch = on(SERVER_EVENTS.MATCH_STARTED, ({ matchId }: { matchId: string }) => {
-            goToBattle(matchId);
+            goToArenaMatch(matchId);
         });
 
         const ctx = gsap.context(() => {
             gsap.from('.header-element', { y: -30, opacity: 0, duration: 0.8, stagger: 0.1, ease: 'power3.out' });
-            gsap.from('.opponent-card', { y: 30, opacity: 0, duration: 0.8, stagger: 0.05, ease: 'power3.out', delay: 0.2 });
+            const cards = containerRef.current?.querySelectorAll('.opponent-card');
+            if (cards && cards.length > 0) {
+                gsap.from('.opponent-card', { y: 30, opacity: 0, duration: 0.8, stagger: 0.05, ease: 'power3.out', delay: 0.2 });
+            }
         }, containerRef);
 
         return () => {
@@ -50,7 +53,7 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
             cleanupMatch();
             ctx.revert();
         };
-    }, [connect, on, goToBattle]);
+    }, [connect, on, goToArenaMatch]);
 
     // This is where we should listen to socket events for Component 3
     // We'll access the socket via MatchContext's internal if possible or similar

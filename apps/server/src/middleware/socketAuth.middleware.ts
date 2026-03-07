@@ -17,8 +17,11 @@ export const socketAuthMiddleware = (socket: CustomSocket, next: (err?: Error) =
     }
 
     try {
-        const decoded = jwt.verify(token, config.jwtSecret) as { id: string; username: string };
-        socket.user = decoded;
+        const decoded = jwt.verify(token, config.jwtSecret) as { sub: string; username: string };
+        socket.user = {
+            id: decoded.sub,
+            username: decoded.username
+        };
         next();
     } catch (err) {
         next(new Error('Authentication error: Invalid token'));

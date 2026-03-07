@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 
 export class UsersService {
     async getById(id: string) {
-        const user = db.query.users.findFirst({
+        const user = await db.query.users.findFirst({
             where: eq(users.id, id),
         });
         if (!user) throw new Error('User not found');
@@ -12,10 +12,10 @@ export class UsersService {
     }
 
     async updateProfile(id: string, data: { username?: string; email?: string; avatarUrl?: string }) {
-        const [updatedUser] = db.update(users)
+        const [updatedUser] = await db.update(users)
             .set(data)
             .where(eq(users.id, id))
-            .returning().all();
+            .returning();
 
         if (!updatedUser) throw new Error('User not found');
         return updatedUser;

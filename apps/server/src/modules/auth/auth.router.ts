@@ -1,16 +1,18 @@
 import { Router } from 'express';
 import { authController } from './auth.controller';
 import { requireAuth } from '../../middleware/auth.middleware';
+import { validate } from '../../middleware/validate';
+import { registerBodySchema, loginBodySchema, updateProfileBodySchema } from './auth.schema';
 
 const router = Router();
 
-router.post('/register', authController.register);
-router.post('/login', authController.login);
+// Public — no auth required; validate() guards all input
+router.post('/register', validate(registerBodySchema), authController.register);
+router.post('/login', validate(loginBodySchema), authController.login);
 router.post('/refresh', authController.refresh);
-router.post('/logout', authController.logout);
 
-// Example of protected route within the same router if needed
-router.get('/profile', requireAuth, authController.getProfile);
-router.patch('/profile', requireAuth, authController.updateProfile);
+// Protected/Optional — requireAuth only for profile/me
+router.post('/logout', authController.logout);
+router.get('/me', requireAuth, authController.getProfile);
 
 export default router;

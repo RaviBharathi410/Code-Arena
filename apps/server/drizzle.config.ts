@@ -5,6 +5,6 @@ export default {
     out: './drizzle',
     driver: 'libsql', // Drizzle uses libsql driver for sqlite
     dbCredentials: {
-        url: 'file:../../sqlite.db',
+        url: 'file:../../sqlite2.db',
     },
 } satisfies Config;

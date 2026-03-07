@@ -1,139 +1,120 @@
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import crypto from 'crypto';
 import { db } from '../db';
 import { matches, submissions, problems } from '@arena/database';
 import { eq } from 'drizzle-orm';
 import { CustomSocket } from '../middleware/socketAuth.middleware';
-
-interface MatchState {
-    id: string;
-    players: string[];
-    userIds: string[];
-    code: Record<string, string>;
-    status: 'waiting' | 'active' | 'completed';
-    problemId?: string;
-}
+import { MatchmakingService } from '../modules/matchmaking/matchmaking.service';
+import { redis } from '../lib/redis';
+import { logger } from '../lib/logger';
+import { matchesService } from '../modules/matches/matches.service';
 
 export class BattleHandler {
-    private matches: Map<string, MatchState> = new Map();
+    private matchmaking: MatchmakingService;
     private onlineUsers: Map<string, { id: string, username: string, socketId: string }> = new Map();
 
-    constructor(private io: Server) { }
+    constructor(private io: Server) {
+        this.matchmaking = new MatchmakingService(io);
+    }
 
     handleConnection(socket: CustomSocket) {
         if (socket.user) {
+            const userId = socket.user.id;
             const userData = {
-                id: socket.user.id,
+                id: userId,
                 username: socket.user.username,
                 socketId: socket.id
             };
-            this.onlineUsers.set(socket.user.id, userData);
+            this.onlineUsers.set(userId, userData);
+
+            // Join personal room for targeted notifications (used by matchmaking)
+            socket.join(`user:${userId}`);
+
             socket.broadcast.emit('user_joined', userData);
             socket.emit('online_users', Array.from(this.onlineUsers.values()));
         }
 
         socket.on('disconnect', () => this.handleDisconnect(socket));
-        socket.on('challenge_user', (data) => this.handleChallenge(socket, data));
+        socket.on('find_match', () => this.handleFindMatch(socket));
+        socket.on('cancel_search', () => this.handleCancelSearch(socket));
         socket.on('join_match', (matchId) => this.handleJoinMatch(socket, matchId));
         socket.on('code_update', (data) => this.handleCodeUpdate(socket, data));
-        socket.on('submit_code', (data) => this.handleSubmitCode(socket, data));
+        socket.on('rejoin_match', (matchId) => this.handleRejoinMatch(socket, matchId));
     }
 
-    private handleDisconnect(socket: CustomSocket) {
-        if (socket.user) {
-            this.onlineUsers.delete(socket.user.id);
-            this.io.emit('user_left', { id: socket.user.id });
-        }
-    }
+    private async handleDisconnect(socket: CustomSocket) {
+        if (!socket.user) return;
+        const userId = socket.user.id;
 
-    private handleChallenge(socket: CustomSocket, { challengerId, opponentId }: { challengerId: string, opponentId: string }) {
-        const challenger = this.onlineUsers.get(challengerId);
-        const opponent = this.onlineUsers.get(opponentId);
+        this.onlineUsers.delete(userId);
+        this.io.emit('user_left', { id: userId });
 
-        if (challenger && opponent) {
-            const matchId = crypto.randomUUID();
-            socket.emit('match_start', { matchId });
-            this.io.to(opponent.socketId).emit('challenge_received', {
-                challengerId,
-                challengerName: challenger.username,
-                matchId
+        // Step 26: Remove from matchmaking queue
+        await this.matchmaking.removeFromQueue(userId);
+
+        // Handle active match disconnect
+        const matchId = socket.data.matchId;
+        if (matchId) {
+            // Set disconnect key with 30s TTL
+            await redis.setex(`disconnect:${matchId}:${userId}`, 30, '1');
+
+            // Notify opponent
+            this.io.to(matchId).emit('OPPONENT_DISCONNECTED', {
+                userId,
+                gracePeriodSeconds: 30
             });
-            this.io.to(opponent.socketId).emit('match_start', { matchId });
+
+            // Schedule forfeit check
+            setTimeout(async () => {
+                const stillDisconnected = await redis.get(`disconnect:${matchId}:${userId}`);
+                if (stillDisconnected) {
+                    try {
+                        logger.info(`[MATCH] Forfeiting match ${matchId} for user ${userId} due to timeout`);
+                        await matchesService.forfeitMatch(matchId, userId);
+                        this.io.to(matchId).emit('MATCH_FORFEITED', { userId });
+                    } catch (err) {
+                        logger.error({ err }, '[MATCH] Failed to forfeit match on timeout');
+                    }
+                }
+            }, 30000);
         }
+    }
+
+    private async handleFindMatch(socket: CustomSocket) {
+        if (!socket.user) return;
+        // In a real app, fetch actual ELO. For now, use a default or 1200.
+        const elo = 1200;
+        await this.matchmaking.findMatch(socket.user.id, elo);
+    }
+
+    private async handleCancelSearch(socket: CustomSocket) {
+        if (!socket.user) return;
+        await this.matchmaking.removeFromQueue(socket.user.id);
     }
 
     private async handleJoinMatch(socket: CustomSocket, matchId: string) {
         socket.join(matchId);
+        socket.data.matchId = matchId; // Store matchId in socket session
+        logger.debug(`User ${socket.user?.id} joined match room ${matchId}`);
+    }
 
-        if (!this.matches.has(matchId)) {
-            const allProblems = await db.select().from(problems);
-            const randomProblem = allProblems[Math.floor(Math.random() * allProblems.length)];
+    private async handleRejoinMatch(socket: CustomSocket, matchId: string) {
+        if (!socket.user) return;
+        const userId = socket.user.id;
 
-            this.matches.set(matchId, {
-                id: matchId,
-                players: [socket.id],
-                userIds: [socket.user?.id || ''],
-                code: {},
-                status: 'waiting',
-                problemId: randomProblem?.id
-            });
-        } else {
-            const match = this.matches.get(matchId)!;
-            if (!match.players.includes(socket.id)) {
-                match.players.push(socket.id);
-                match.userIds.push(socket.user?.id || '');
+        // Clear disconnect key
+        await redis.del(`disconnect:${matchId}:${userId}`);
 
-                if (match.players.length === 2) {
-                    try {
-                        await db.insert(matches).values({
-                            id: matchId,
-                            player1Id: match.userIds[0],
-                            player2Id: match.userIds[1],
-                            problemId: match.problemId!,
-                            status: 'active'
-                        });
+        socket.join(matchId);
+        socket.data.matchId = matchId;
 
-                        match.status = 'active';
-
-                        const problemResult = await db.select().from(problems).where(eq(problems.id, match.problemId!)).limit(1);
-                        const problem = problemResult[0];
-
-                        this.io.to(matchId).emit('match_start', {
-                            problemId: match.problemId,
-                            problem,
-                            players: match.userIds
-                        });
-                    } catch (err) {
-                        console.error('Failed to update match in DB:', err);
-                    }
-                }
-            }
-        }
+        this.io.to(matchId).emit('OPPONENT_RECONNECTED', { userId });
     }
 
     private handleCodeUpdate(socket: CustomSocket, { matchId, code }: { matchId: string, code: string }) {
-        const match = this.matches.get(matchId);
-        if (match) {
-            match.code[socket.id] = code;
-            socket.to(matchId).emit('opponent_code_update', { playerId: socket.id, code });
-        }
-    }
-
-    private async handleSubmitCode(socket: CustomSocket, { matchId, code, languageId }: { matchId: string, code: string, languageId: number }) {
-        const userId = socket.user?.id;
-        try {
-            await db.insert(submissions).values({
-                id: crypto.randomUUID(),
-                userId: userId!,
-                matchId,
-                code,
-                languageId: languageId || 63, // Fallback to JS
-                status: 'accepted'
-            });
-            await db.update(matches).set({ winnerId: userId, status: 'completed' }).where(eq(matches.id, matchId));
-            this.io.to(matchId).emit('match_result', { winner: socket.id, status: 'completed', winnerId: userId });
-        } catch (err) {
-            console.error('Failed to process submission:', err);
-        }
+        socket.to(matchId).emit('opponent_code_update', {
+            playerId: socket.user?.id,
+            code
+        });
     }
 }

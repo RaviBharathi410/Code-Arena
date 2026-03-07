@@ -48,6 +48,7 @@ export const Login: React.FC = () => {
             if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter';
             if (!/[0-9]/.test(password)) return 'Password must contain a number';
             if (!username) return 'Username is required';
+            if (!/^[a-zA-Z0-9_-]+$/.test(username)) return 'Username must contain only letters, numbers, underscores, or hyphens';
         }
         return null;
     };
@@ -76,7 +77,10 @@ export const Login: React.FC = () => {
             }
             goToDashboard();
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Authentication failed. Please check your uplink.';
+            let msg = err.response?.data?.message || 'Authentication failed. Please check your uplink.';
+            if (err.response?.status === 409) {
+                msg = 'Username or email already taken. Please try another or sign in.';
+            }
             setError(msg);
             setPassword('');
         } finally {

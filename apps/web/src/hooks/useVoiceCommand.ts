@@ -8,6 +8,7 @@ interface VoiceCommandOptions {
 
 export const useVoiceCommand = ({ commands, onInterimResults, autoStart = false }: VoiceCommandOptions) => {
     const [isListening, setIsListening] = useState(false);
+    const isListeningRef = useRef(false);
     const recognitionRef = useRef<any>(null);
     const commandsRef = useRef(commands);
     const onInterimResultsRef = useRef(onInterimResults);
@@ -24,18 +25,24 @@ export const useVoiceCommand = ({ commands, onInterimResults, autoStart = false 
     const startListening = useCallback(() => {
         if (!recognitionRef.current) return;
         try {
-            recognitionRef.current.start();
+            isListeningRef.current = true;
             setIsListening(true);
-        } catch (e) {
-            console.error('Speech recognition error:', e);
+            recognitionRef.current.start();
+        } catch (e: any) {
+            if (e.name === 'InvalidStateError') {
+                // Already started, ignore
+            } else {
+                console.error('Speech recognition error:', e);
+            }
         }
-    }, []);
+    }, [setIsListening]);
 
     const stopListening = useCallback(() => {
         if (!recognitionRef.current) return;
-        recognitionRef.current.stop();
+        isListeningRef.current = false;
         setIsListening(false);
-    }, []);
+        recognitionRef.current.stop();
+    }, [setIsListening]);
 
     useEffect(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -79,18 +86,16 @@ export const useVoiceCommand = ({ commands, onInterimResults, autoStart = false 
         };
 
         recognition.onend = () => {
-            // We only restart if we are explicitly in "listening" state
-            // and the recognition ended normally
-            setIsListening(prev => {
-                if (prev) {
-                    try {
-                        recognition.start();
-                    } catch (e) {
+            // Restart if we are still supposed to be listening
+            if (isListeningRef.current) {
+                try {
+                    recognition.start();
+                } catch (e: any) {
+                    if (e.name !== 'InvalidStateError') {
                         console.error('Auto-restart failed:', e);
                     }
                 }
-                return prev;
-            });
+            }
         };
 
         recognitionRef.current = recognition;
