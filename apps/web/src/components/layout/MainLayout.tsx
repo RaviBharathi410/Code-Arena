@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, Component, ErrorInfo, ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNav, PAGES } from "../../navigation/NavigationContext";
+import type { PageId } from "../../navigation/navigationState";
 import {
     Activity, Sword, Beaker, Trophy,
     BarChart2, Cpu, Play, LogOut, X
@@ -161,9 +162,30 @@ const navSections = [
 ];
 
 export default function MainLayout({ children }: MainLayoutProps) {
-    const location = useLocation();
-    const navigate = useNavigate();
+    const { currentPage, goToDashboard, goToBattle, goToHistory, goToPractice, goToTournaments, goToLeaderboard, goToSettings, goToLogin } = useNav();
     const { logout } = useAuthStore();
+
+    // Map nav item IDs to pages for active detection
+    const NAV_ID_TO_PAGE: Record<string, PageId> = {
+        command: PAGES.DASHBOARD,
+        battle: PAGES.BATTLE,
+        history: PAGES.HISTORY,
+        practice: PAGES.PRACTICE,
+        tournaments: PAGES.TOURNAMENTS,
+        leaderboard: PAGES.LEADERBOARD,
+        settings: PAGES.SETTINGS,
+    };
+
+    // Map nav item IDs to navigation actions
+    const NAV_ACTIONS: Record<string, () => void> = {
+        command: goToDashboard,
+        battle: goToBattle,
+        history: goToHistory,
+        practice: goToPractice,
+        tournaments: goToTournaments,
+        leaderboard: goToLeaderboard,
+        settings: goToSettings,
+    };
 
     const [isMenuOpen, setIsMenuOpen] = useState(() => {
         const saved = localStorage.getItem('arena_menu_open');
@@ -234,13 +256,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
                                     <div className="space-y-1">
                                         {section.items.map((item) => {
                                             const Icon = item.icon;
-                                            const isActive = location.pathname === item.path || (item.id === 'command' && location.pathname === '/dashboard');
+                                            const isActive = currentPage === NAV_ID_TO_PAGE[item.id];
                                             return (
                                                 <button
                                                     key={item.id}
                                                     onClick={() => {
-                                                        navigate(item.path);
-                                                        setIsMenuOpen(false); // Hide once selected
+                                                        NAV_ACTIONS[item.id]?.();
+                                                        setIsMenuOpen(false);
                                                     }}
                                                     className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all font-bold uppercase text-xs tracking-widest border
                                                             ${isActive
@@ -260,7 +282,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
                         <div className="mt-auto pt-6 border-t border-white/10">
                             <button
-                                onClick={() => { logout(); navigate('/login'); setIsMenuOpen(false); }}
+                                onClick={() => { logout(); goToLogin(); setIsMenuOpen(false); }}
                                 className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 font-bold uppercase text-xs tracking-widest hover:bg-red-500/10 transition-all"
                             >
                                 <LogOut size={18} />

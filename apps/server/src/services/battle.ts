@@ -21,9 +21,53 @@ interface MatchState {
 
 class BattleService {
     private matches: Map<string, MatchState> = new Map();
+    private onlineUsers: Map<string, { id: string, username: string, socketId: string }> = new Map();
 
     initialize(io: Server) {
         io.on('connection', (socket: CustomSocket) => {
+            if (socket.user) {
+                const userData = {
+                    id: socket.user.id,
+                    username: socket.user.username,
+                    socketId: socket.id
+                };
+                this.onlineUsers.set(socket.user.id, userData);
+
+                // Broadcast to others
+                socket.broadcast.emit('user_joined', userData);
+
+                // Send current list to the new user
+                socket.emit('online_users', Array.from(this.onlineUsers.values()));
+            }
+
+            socket.on('disconnect', () => {
+                if (socket.user) {
+                    this.onlineUsers.delete(socket.user.id);
+                    io.emit('user_left', { id: socket.user.id });
+                }
+            });
+
+            socket.on('challenge_user', ({ challengerId, opponentId }: { challengerId: string, opponentId: string }) => {
+                const challenger = this.onlineUsers.get(challengerId);
+                const opponent = this.onlineUsers.get(opponentId);
+
+                if (challenger && opponent) {
+                    const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+                    // Inform challenger immediately to transition
+                    socket.emit('match_start', { matchId });
+
+                    // Inform opponent
+                    io.to(opponent.socketId).emit('challenge_received', {
+                        challengerId,
+                        challengerName: challenger.username,
+                        matchId
+                    });
+
+                    // Also inform opponent to transition if auto-accepting for now
+                    io.to(opponent.socketId).emit('match_start', { matchId });
+                }
+            });
             socket.on('join_match', async (matchId: string) => {
                 socket.join(matchId);
 

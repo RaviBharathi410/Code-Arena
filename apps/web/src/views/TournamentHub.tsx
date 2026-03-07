@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Users, Clock, Gavel, Activity, Zap, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNav } from '../navigation/NavigationContext';
 import gsap from 'gsap';
 import { useArenaStore } from '../store/useArenaStore';
 
@@ -71,7 +71,7 @@ const TOURNAMENTS_DATA: Tournament[] = [
 
 
 export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean }> = ({ isLight, isStandalone: propStandalone }) => {
-    const navigate = useNavigate();
+    const { goToDashboard } = useNav();
     const { tournaments } = useArenaStore();
     const [activeFilter, setActiveFilter] = useState<'Upcoming' | 'Live' | 'Completed'>('Upcoming');
 
@@ -127,7 +127,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
         <div className={`w-full panel-content ${isStandalone ? 'h-screen overflow-y-auto custom-scrollbar bg-[#020202]' : 'bg-transparent'} ${isLight ? 'bg-gray-50 text-black' : 'text-white'} space-y-8 pb-12 relative px-4 md:px-8`}>
             {isStandalone && (
                 <button
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => goToDashboard()}
                     className="absolute top-8 right-8 p-3 rounded-full hover:bg-white/5 border border-white/10 transition-all text-gray-500 hover:text-white z-50 group"
                     title="Return to Dashboard"
                 >

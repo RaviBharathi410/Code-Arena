@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState, useMemo, ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState, useMemo, ReactNode, useCallback } from 'react';
+import { useNav, PAGES } from '../navigation/NavigationContext';
 import gsap from 'gsap';
-import { useAuthStore } from '../store/useAuthStore';
 import { useArenaStore } from '../store/useArenaStore';
 import { TournamentHub } from './TournamentHub';
 import { useLayout } from '../components/layout/MainLayout';
+import api from '../lib/api';
+import { User, LeaderboardEntry, Match } from '../types';
 
 import {
     Trophy, Zap, Activity,
@@ -96,25 +97,33 @@ const SkillRadar: React.FC<{ isLight: boolean; skills?: { name: string; value: n
 type Tab = 'command' | 'battle' | 'practice' | 'tournaments' | 'history' | 'leaderboard' | 'profile' | 'settings';
 
 // ── Main Dashboard ────────────────────────────────────────────────────────
-export const Dashboard: React.FC = () => {
-    const { user, fetchProfile } = useAuthStore();
-    const { fetchProblems, fetchTournaments, fetchLeaderboard, leaderboard } = useArenaStore();
-    const navigate = useNavigate();
-    const location = useLocation();
+export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+    const { fetchProblems, fetchTournaments } = useArenaStore();
+    const { currentPage, goToBattle, goToOpponents, goToArenaSolo, goToArenaPractice, goToHistory, goToProfile } = useNav();
     const { isMenuOpen, setIsMenuOpen, isLight, setTheme } = useLayout();
+
+    const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
+    const [recentMatchesData, setRecentMatchesData] = useState<Match[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const notifRef = useRef<HTMLDivElement>(null);
     const mailRef = useRef<HTMLDivElement>(null);
 
-    const getTabFromPath = (path: string): Tab => {
-        const p = path.split('/')[1];
-        if (['command', 'battle', 'practice', 'tournaments', 'history', 'leaderboard', 'profile', 'settings'].includes(p)) return p as Tab;
-        if (p === 'dashboard') return 'command';
-        return 'command';
+    // Map currentPage to Dashboard tab
+    const PAGE_TO_TAB: Record<string, Tab> = {
+        [PAGES.DASHBOARD]: 'command',
+        [PAGES.BATTLE]: 'battle',
+        [PAGES.PRACTICE]: 'practice',
+        [PAGES.TOURNAMENTS]: 'tournaments',
+        [PAGES.HISTORY]: 'history',
+        [PAGES.LEADERBOARD]: 'leaderboard',
+        [PAGES.PROFILE]: 'profile',
+        [PAGES.SETTINGS]: 'settings',
     };
 
-    const [activeTab, setActiveTab] = useState<Tab>(getTabFromPath(location.pathname));
+    const [activeTab, setActiveTab] = useState<Tab>(PAGE_TO_TAB[currentPage] || 'command');
     const [searchQuery, setSearchQuery] = useState('');
     const [showNots, setShowNots] = useState(false);
     const [showMail, setShowMail] = useState(false);
@@ -131,8 +140,8 @@ export const Dashboard: React.FC = () => {
     ]);
 
     useEffect(() => {
-        setActiveTab(getTabFromPath(location.pathname));
-    }, [location.pathname]);
+        setActiveTab(PAGE_TO_TAB[currentPage] || 'command');
+    }, [currentPage]);
 
     // Close notification/mail dropdowns on outside click
     useEffect(() => {
@@ -148,11 +157,28 @@ export const Dashboard: React.FC = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const fetchDashboardData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [lbRes, mRes] = await Promise.all([
+                api.get('/leaderboard?limit=8'),
+                api.get(`/matches/recent?userId=${currentUser.id}`)
+            ]);
+            setLeaderboardData(lbRes.data);
+            setRecentMatchesData(mRes.data);
+        } catch (err: any) {
+            console.error('Failed to fetch dashboard data:', err);
+            setError('Intelligence uplink failed. System compromised.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [currentUser.id]);
+
     useEffect(() => {
-        fetchProfile();
+        fetchDashboardData();
         fetchProblems();
         fetchTournaments();
-        fetchLeaderboard();
 
         const ctx = gsap.context((self) => {
             const elements = self.selector?.('.dash-element');
@@ -180,11 +206,11 @@ export const Dashboard: React.FC = () => {
     }, [activeTab]);
 
     const sortedLeaderboard = useMemo(() => {
-        const data = leaderboard.length > 0 ? (leaderboard as any[]) : (INITIAL_LEADERBOARD as any[]);
+        const data = leaderboardData.length > 0 ? leaderboardData : INITIAL_LEADERBOARD;
         let results = [...data].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        if (searchQuery) results = results.filter(e => (e.username || e.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
+        if (searchQuery) results = results.filter(e => (e.username || '').toLowerCase().includes(searchQuery.toLowerCase()));
         return results;
-    }, [leaderboard, searchQuery]);
+    }, [leaderboardData, searchQuery]);
 
     // ── Panel Components ──────────────────────────────────────────────────
     const CommandPanel = () => (
@@ -199,19 +225,21 @@ export const Dashboard: React.FC = () => {
                     <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-black to-gray-400' : 'from-cyan-400 to-blue-600'}`}>Center</span>
                 </h1>
                 <p className={`text-lg max-w-lg font-light leading-relaxed ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
-                    Welcome back, Operator <strong className={isLight ? 'text-black' : 'text-white'}>{user?.username}</strong>. Monitoring live combat vectors.
+                    Welcome back, Operator <strong className={isLight ? 'text-black' : 'text-white'}>{currentUser.username}</strong>. Monitoring live combat vectors.
                 </p>
+                {isLoading && <div className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse text-cyan-500">Syncing with global intel...</div>}
+                {error && <div className="text-xs font-black uppercase text-red-500">{error}</div>}
             </div>
             <div className="flex flex-wrap gap-4">
-                <button onClick={() => navigate('/battle')} className={`group relative px-8 py-4 rounded-full font-black uppercase text-xs tracking-[0.2em] overflow-hidden flex items-center gap-3 hover:scale-105 transition-transform ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
+                <button onClick={() => goToBattle()} className={`group relative px-8 py-4 rounded-full font-black uppercase text-xs tracking-[0.2em] overflow-hidden flex items-center gap-3 hover:scale-105 transition-transform ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
                     <Zap size={18} fill="currentColor" /> Enter Arena
                 </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                 {[
-                    { icon: <Trophy size={20} />, val: user?.rating ?? 2431, label: 'Rank Rating' },
+                    { icon: <Trophy size={20} />, val: currentUser.rating ?? 2431, label: 'Rank Rating' },
                     { icon: <Target size={20} />, val: '64.2%', label: 'Win Rate' },
-                    { icon: <Activity size={20} />, val: user?.wins ?? 128, label: 'Total Battles' },
+                    { icon: <Activity size={20} />, val: currentUser.wins ?? 128, label: 'Total Battles' },
                 ].map((s, i) => (
                     <div key={i} className={`p-6 rounded-3xl border backdrop-blur-xl relative overflow-hidden group transition-all hover:-translate-y-1 ${isLight ? 'bg-white border-black/5 shadow-xl' : 'bg-white/5 border-white/10 hover:bg-white/8'}`}>
                         <div className={`p-3 rounded-2xl w-fit mb-4 ${isLight ? 'bg-black/5' : 'bg-white/10'}`}>{s.icon}</div>
@@ -231,8 +259,8 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[
-                    { title: 'Ranked Dual', desc: 'Climb the global leaderboard in 1v1 combat.', icon: <Sword size={28} />, badge: 'STAKES', action: () => navigate('/opponents') },
-                    { title: 'Quick Match', desc: 'Jump into a casual speed-coding session instantly.', icon: <Zap size={28} />, badge: 'FAST', action: () => navigate('/arena/solo') },
+                    { title: 'Ranked Dual', desc: 'Climb the global leaderboard in 1v1 combat.', icon: <Sword size={28} />, badge: 'STAKES', action: () => goToOpponents() },
+                    { title: 'Quick Match', desc: 'Jump into a casual speed-coding session instantly.', icon: <Zap size={28} />, badge: 'FAST', action: () => goToArenaSolo() },
                 ].map((mode, i) => (
                     <button key={i} onClick={mode.action}
                         className={`group p-8 rounded-3xl border transition-all duration-300 text-left relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10 hover:bg-black/10' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
@@ -268,7 +296,7 @@ export const Dashboard: React.FC = () => {
                                 { title: 'Weakness Fix', desc: 'AI-curated drills targeting your historical failure points.', icon: <Shield size={24} />, mode: 'ADAPTIVE' },
                                 { title: 'AI Coach Mode', desc: 'Real-time complexity analysis and logic optimization hints.', icon: <Sparkles size={24} />, mode: 'COACH' },
                             ].map((mode, i) => (
-                                <button key={i} onClick={() => navigate('/arena/practice?type=' + mode.mode.toLowerCase())}
+                                <button key={i} onClick={() => goToArenaPractice(mode.mode.toLowerCase())}
                                     className={`group p-8 rounded-[2.5rem] border text-left transition-all relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10 hover:bg-black/10' : 'bg-white/5 border-white/8 hover:bg-white/10'}`}>
                                     <div className="flex justify-between items-start mb-8 relative z-10">
                                         <div className={`p-4 rounded-3xl ${isLight ? 'bg-white shadow-lg' : 'bg-white/10 backdrop-blur-md'}`}>{mode.icon}</div>
@@ -312,7 +340,7 @@ export const Dashboard: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={() => navigate('/arena/practice')} className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.25em] transition-all relative z-10 ${isLight ? 'bg-white text-black hover:scale-[0.98]' : 'bg-black text-white hover:scale-[0.98]'}`}>
+                            <button onClick={() => goToArenaPractice()} className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.25em] transition-all relative z-10 ${isLight ? 'bg-white text-black hover:scale-[0.98]' : 'bg-black text-white hover:scale-[0.98]'}`}>
                                 Launch Drill
                             </button>
                             <div className="absolute top-0 right-0 -mr-20 -mt-20 opacity-10">
@@ -340,9 +368,9 @@ export const Dashboard: React.FC = () => {
                         <div key={i} className={`p-6 rounded-2xl border flex items-center justify-between ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-white/5 border-white/10'}`}>
                             <div className="flex items-center gap-4">
                                 <span className="font-black opacity-20 text-2xl w-8">#{i + 1}</span>
-                                <span className="font-bold">{u.username || u.name}</span>
+                                <span className="font-bold">{u.username}</span>
                             </div>
-                            <span className="font-black text-cyan-500">{u.rating || u.rp} RP</span>
+                            <span className="font-black text-cyan-500">{u.rating} RP</span>
                         </div>
                     ))}
                 </div>
@@ -369,7 +397,7 @@ export const Dashboard: React.FC = () => {
                         <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden ${isLight ? 'bg-black text-white shadow-2xl' : 'bg-white text-black shadow-white/5 shadow-2xl skew-y-1'}`}>
                             <div className="relative group cursor-pointer mb-8">
                                 <div className={`w-32 h-32 rounded-[2.5rem] bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center font-black text-5xl transition-transform group-hover:scale-105 duration-500`}>
-                                    {user?.username?.[0].toUpperCase()}
+                                    {currentUser.username?.[0].toUpperCase()}
                                 </div>
                                 {isEditingProfile && (
                                     <div className="absolute inset-0 bg-black/40 rounded-[2.5rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -378,12 +406,12 @@ export const Dashboard: React.FC = () => {
                                 )}
                             </div>
                             <div className="text-center space-y-2">
-                                <h3 className="text-3xl font-black italic tracking-tighter uppercase">{user?.username}</h3>
+                                <h3 className="text-3xl font-black italic tracking-tighter uppercase">{currentUser.username}</h3>
                                 <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-40">Active Instance // US-EAST-1</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4 w-full mt-10">
                                 <div className="text-center p-4 border border-current rounded-2xl opacity-40">
-                                    <p className="text-2xl font-black tracking-tighter">{user?.rating}</p>
+                                    <p className="text-2xl font-black tracking-tighter">{currentUser.rating}</p>
                                     <p className="text-[8px] font-black uppercase tracking-widest mt-1">Global RP</p>
                                 </div>
                                 <div className="text-center p-4 border border-current rounded-2xl opacity-40">
@@ -444,33 +472,28 @@ export const Dashboard: React.FC = () => {
                                 <span className="opacity-40 italic">Uplink Stable</span>
                             </h4>
                             <div className="space-y-4">
-                                {[
-                                    { vs: 'NeonShadow_X', date: '3m ago', rp: '+42', result: 'VICTORY', accuracy: '98%', difficulty: 'HARD' },
-                                    { vs: 'Null_Pointer', date: '2h ago', rp: '-12', result: 'DEFEAT', accuracy: '82%', difficulty: 'MEDIUM' },
-                                    { vs: 'Byte_Me', date: '1d ago', rp: '+25', result: 'VICTORY', accuracy: '94%', difficulty: 'EASY' }
-                                ].map((log, i) => (
-                                    <div key={i} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all hover:bg-white/5 border border-transparent hover:border-white/10`}>
+                                {recentMatchesData.length === 0 && !isLoading && (
+                                    <p className="text-xs opacity-40 italic">No recent combat logs found in this sector.</p>
+                                )}
+                                {recentMatchesData.map((log, i) => (
+                                    <div key={log.id} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all hover:bg-white/5 border border-transparent hover:border-white/10`}>
                                         <div className="flex items-center gap-6">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${log.result === 'VICTORY' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                                                {log.vs[0]}
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${log.status === 'completed' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                                                {log.player2Id === currentUser.id ? 'VS' : 'OP'}
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-lg font-black italic uppercase tracking-tighter">vs {log.vs}</span>
-                                                    <span className="text-[8px] font-black px-1.5 py-0.5 bg-white/10 rounded uppercase opacity-50 tracking-widest">{log.difficulty}</span>
+                                                    <span className="text-lg font-black italic uppercase tracking-tighter">Match #{log.id.slice(0, 8)}</span>
+                                                    <span className="text-[8px] font-black px-1.5 py-0.5 bg-white/10 rounded uppercase opacity-50 tracking-widest">{log.status}</span>
                                                 </div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mt-1">Accuracy: {log.accuracy} // {log.date}</p>
+                                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mt-1">Status: {log.status} // {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'Active'}</p>
                                             </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className={`text-xl font-black ${log.rp.startsWith('+') ? 'text-cyan-400' : 'text-red-400'}`}>{log.rp} RP</p>
-                                            <p className="text-[8px] font-black uppercase tracking-widest opacity-40 tracking-tighter mt-1">Net Gain</p>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                             <button
-                                onClick={() => { setActiveTab('history'); navigate('/history'); }}
+                                onClick={() => { setActiveTab('history'); goToHistory(); }}
                                 className="w-full mt-10 py-5 rounded-[2rem] border border-dashed border-gray-500/30 text-[9px] font-black uppercase tracking-[0.3em] opacity-40 hover:opacity-100 hover:border-gray-500 transition-all font-black"
                             >
                                 View Full Combat Archive
@@ -485,17 +508,17 @@ export const Dashboard: React.FC = () => {
                                     <div className="space-y-1.5">
                                         <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator ID</label>
                                         {isEditingProfile ? (
-                                            <input type="text" defaultValue={user?.username} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
+                                            <input type="text" defaultValue={currentUser.username} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
                                         ) : (
-                                            <p className="text-lg font-black italic tracking-tighter">{user?.username || 'GUEST_OPERATOR'}</p>
+                                            <p className="text-lg font-black italic tracking-tighter">{currentUser.username || 'GUEST_OPERATOR'}</p>
                                         )}
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Uplink Email</label>
                                         {isEditingProfile ? (
-                                            <input type="email" defaultValue={user?.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
+                                            <input type="email" defaultValue={currentUser.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
                                         ) : (
-                                            <p className="text-lg font-black italic tracking-tighter truncate">{user?.email || 'N/A'}</p>
+                                            <p className="text-lg font-black italic tracking-tighter truncate">{currentUser.email || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -575,7 +598,7 @@ export const Dashboard: React.FC = () => {
                                         <div className="space-y-1.5">
                                             {sortedLeaderboard.slice(0, 4).map((item, i) => (
                                                 <div key={i} className={`p-4 rounded-2xl flex items-center justify-between group transition-all cursor-pointer ${isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'}`}>
-                                                    <span className="text-xs font-black uppercase tracking-tight">{item.username || item.name}</span>
+                                                    <span className="text-xs font-black uppercase tracking-tight">{item.username}</span>
                                                     <ChevronRight size={14} className="opacity-0 group-hover:opacity-100" />
                                                 </div>
                                             ))}
@@ -637,18 +660,18 @@ export const Dashboard: React.FC = () => {
 
                             <div className="relative ml-2">
                                 <button
-                                    onClick={() => navigate('/profile')}
+                                    onClick={() => goToProfile()}
                                     className={`flex items-center gap-3 pl-3 pr-2 py-2 rounded-2xl border transition-all ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
                                 >
                                     <div className="flex flex-col items-end hidden sm:block">
-                                        <span className="text-[10px] font-black uppercase tracking-tighter">{user?.username || 'OPERATOR'}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">{currentUser.username || 'OPERATOR'}</span>
                                         <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                                             <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Active</span>
                                         </div>
                                     </div>
                                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-black font-black text-sm`}>
-                                        {(user?.username || 'G')[0].toUpperCase()}
+                                        {(currentUser.username || 'G')[0].toUpperCase()}
                                     </div>
                                 </button>
                             </div>

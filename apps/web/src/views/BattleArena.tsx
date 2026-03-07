@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { useBattleStore } from '../store/useBattleStore';
+import { useMatch } from '../contexts/MatchContext';
 import { useVoiceToCode } from '../hooks/useVoiceToCode';
-import { useNavigate, useParams } from 'react-router-dom';
-import { useAuthStore } from '../store/useAuthStore';
+import { useNav } from '../navigation/NavigationContext';
 import { Trophy, Zap, Mic, ChevronRight, Activity, Sword, Target, FileText, Code2, BrainCircuit, X, Shield } from 'lucide-react';
 import { NeonButton } from '../components/ui/NeonButton';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -31,23 +30,23 @@ const analyzeComplexity = (code: string) => {
     return { time: timeComplexity, space: spaceComplexity };
 };
 
-export const BattleArena: React.FC = () => {
+import { User, Problem } from '../types';
+
+export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem?: Problem }> = ({ currentUser, matchId, problem: propProblem }) => {
     const {
-        initializeSocket,
-        joinMatch,
         updateCode,
         opponentCode,
         isMatchActive,
         winner,
         submitCode,
-        problem
-    } = useBattleStore();
+        joinMatch,
+        problem: contextProblem
+    } = useMatch();
 
-    const { matchId } = useParams<{ matchId: string }>();
-    const navigate = useNavigate();
-    const { user } = useAuthStore();
+    const currentProblem = contextProblem || propProblem;
+    const { goToDashboard } = useNav();
 
-    const [code, setCode] = useState('// Your code here...');
+    const [code, setCode] = useState(currentProblem?.baseCode || '// Your code here...');
     const [notes, setNotes] = useState('');
     const [activeTab, setActiveTab] = useState<'code' | 'notes'>('code');
     const [complexity, setComplexity] = useState({ time: 'O(1)', space: 'O(1)' });
@@ -68,13 +67,10 @@ export const BattleArena: React.FC = () => {
     });
 
     useEffect(() => {
-        if (problem?.baseCode) {
-            setCode(problem.baseCode);
+        // Auto-join match on mount if we have a matchId
+        if (matchId) {
+            joinMatch(matchId);
         }
-    }, [problem]);
-
-    useEffect(() => {
-        initializeSocket();
 
         // Entrance Animation for header
         const ctx = gsap.context(() => {
@@ -87,11 +83,10 @@ export const BattleArena: React.FC = () => {
         });
 
         return () => ctx.revert();
-    }, []);
+    }, [matchId, joinMatch]);
 
     useEffect(() => {
         if (isMatchActive) {
-            // Animation for battle cards when match starts
             const ctx = gsap.context(() => {
                 gsap.from('.battle-card', {
                     y: 30,
@@ -106,7 +101,6 @@ export const BattleArena: React.FC = () => {
         }
     }, [isMatchActive]);
 
-    // Analyze complexity when the match ends
     useEffect(() => {
         if (winner) {
             setComplexity(analyzeComplexity(code));
@@ -117,13 +111,13 @@ export const BattleArena: React.FC = () => {
         if (isMatchActive && !winner) {
             setShowExitWarning(true);
         } else {
-            navigate('/dashboard');
+            goToDashboard();
         }
     };
 
     const confirmExit = () => {
         setShowExitWarning(false);
-        navigate('/dashboard', { replace: true });
+        goToDashboard();
     };
 
     useEffect(() => {
@@ -217,13 +211,13 @@ export const BattleArena: React.FC = () => {
                                     <Target size={18} />
                                     <h3 className="font-bold uppercase tracking-wider text-sm">Objectives</h3>
                                 </div>
-                                <h4 className="text-lg font-bold mb-2">{problem?.title || 'Loading Protocol...'}</h4>
+                                <h4 className="text-lg font-bold mb-2">{currentProblem?.title || 'Loading Protocol...'}</h4>
                                 <div className="text-xs inline-block px-2 py-1 rounded bg-white/5 text-gray-400 mb-4 self-start">
-                                    {problem?.difficulty || 'Standard'}
+                                    {currentProblem?.difficulty || 'Standard'}
                                 </div>
                                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                                     <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap">
-                                        {problem?.description || 'Synchronizing problem data from server...'}
+                                        {currentProblem?.description || 'Synchronizing currentProblem data from server...'}
                                     </p>
                                 </div>
                             </GlassCard>
@@ -235,7 +229,7 @@ export const BattleArena: React.FC = () => {
                                 <div className="flex items-center justify-between px-2">
                                     <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase">
                                         <div className="w-2 h-2 rounded-full bg-cyan-500" />
-                                        <span>Local Uplink [{user?.username || 'You'}]</span>
+                                        <span>Local Uplink [{currentUser.username || 'You'}]</span>
                                     </div>
                                     <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
                                         <button
@@ -348,7 +342,7 @@ export const BattleArena: React.FC = () => {
                             </div>
                         </div>
 
-                        <NeonButton className="w-full h-14 text-lg font-bold tracking-widest" onClick={() => navigate('/dashboard')}>
+                        <NeonButton className="w-full h-14 text-lg font-bold tracking-widest" onClick={() => goToDashboard()}>
                             Return to Command Center
                         </NeonButton>
                     </GlassCard>

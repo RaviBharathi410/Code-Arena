@@ -10,6 +10,8 @@ const router = Router();
 // GET /api/leaderboard — get global leaderboard sorted by rating
 router.get('/', authMiddleware, async (req: any, res) => {
     try {
+        const limit = parseInt(req.query.limit as string) || 50;
+
         // Join leaderboard with users to get usernames
         const rankings = await db
             .select({
@@ -24,6 +26,7 @@ router.get('/', authMiddleware, async (req: any, res) => {
             .from(leaderboard)
             .innerJoin(users, eq(leaderboard.userId, users.id))
             .orderBy(desc(leaderboard.rating))
+            .limit(limit)
             .all();
 
         // If leaderboard is empty, fall back to users table sorted by rating
@@ -39,7 +42,7 @@ router.get('/', authMiddleware, async (req: any, res) => {
                 })
                 .from(users)
                 .orderBy(desc(users.rating))
-                .limit(50)
+                .limit(limit)
                 .all();
 
             return res.json(fallbackRankings.map((u, i) => ({

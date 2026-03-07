@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNav } from '../navigation/NavigationContext';
 import { gsap } from 'gsap';
-import axios from 'axios';
+import api from '../lib/api';
 import { useAuthStore } from '../store/useAuthStore';
 import {
     Activity, Mail, Lock, User, ArrowRight,
@@ -9,13 +9,15 @@ import {
 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-    const [isLogin, setIsLogin] = useState(true);
-    const [formData, setFormData] = useState({ username: '', email: '', password: '' });
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [isLogin, setIsLogin] = useState(true);
+    const [username, setUsername] = useState('');
 
-    const navigate = useNavigate();
+    const { goToDashboard } = useNav();
     const setAuth = useAuthStore((state) => state.setAuth);
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -34,21 +36,46 @@ export const Login: React.FC = () => {
         return () => ctx.revert();
     }, [isLogin]);
 
+    const validate = () => {
+        if (!email) return 'Email is required';
+        if (isLogin && !email.includes('@') && !/^[a-zA-Z0-0_]+$/.test(email)) return 'Invalid email or username format';
+        if (!isLogin && !email.includes('@')) return 'Please enter a valid email address';
+        if (!password) return 'Password is required';
+        if (password.length < 6) return 'Password must be at least 6 characters';
+        if (!isLogin && !username) return 'Username is required';
+        return null;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // 1. Client-side validation
+        const valError = validate();
+        if (valError) {
+            setError(valError);
+            return;
+        }
+
+        // 2. Set loading, clear error
         setLoading(true);
-        setError('');
+        setError(null);
+
         try {
             const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
             const payload = isLogin
-                ? { email: formData.email, password: formData.password }
-                : formData;
+                ? { email, password }
+                : { email, password, username };
 
-            const response = await axios.post(`http://localhost:3001${endpoint}`, payload);
+            const response = await api.post(endpoint, payload);
+
+            // 3. Success: setAuth and goToDashboard
             setAuth(response.data.user, response.data.token);
-            navigate('/dashboard');
+            goToDashboard();
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+            // 4. Failure: set error, reset password field
+            const msg = err.response?.data?.message || 'Authentication failed. Please check your uplink.';
+            setError(msg);
+            setPassword(''); // Security/UX: clear password on fail
         } finally {
             setLoading(false);
         }
@@ -56,9 +83,13 @@ export const Login: React.FC = () => {
 
     const switchMode = () => {
         setIsLogin(!isLogin);
-        setError('');
-        setFormData({ username: '', email: '', password: '' });
+        setError(null);
+        setEmail('');
+        setPassword('');
+        setUsername('');
     };
+
+    const isSubmitDisabled = loading || !email || !password || (!isLogin && !username);
 
     return (
         <div ref={containerRef} className="relative min-h-screen w-full bg-[#020202] text-white overflow-hidden flex items-center justify-center selection:bg-white selection:text-black">
@@ -134,10 +165,10 @@ export const Login: React.FC = () => {
                                 </label>
                                 <input
                                     type="text" placeholder="operator_alias"
-                                    value={formData.username}
-                                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                    required
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    disabled={loading}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                 />
                             </div>
                         )}
@@ -149,10 +180,10 @@ export const Login: React.FC = () => {
                             <input
                                 type="text"
                                 placeholder={isLogin ? 'operator@nexus.io or alias' : 'operator@nexus.io'}
-                                value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                required
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={loading}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             />
                         </div>
 
@@ -164,13 +195,13 @@ export const Login: React.FC = () => {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     placeholder="••••••••"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    required
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    disabled={loading}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/30 focus:bg-white/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                 />
-                                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white transition-colors">
+                                <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={loading}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white transition-colors disabled:opacity-30">
                                     {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                                 </button>
                             </div>
@@ -182,10 +213,10 @@ export const Login: React.FC = () => {
                             </div>
                         )}
 
-                        <button type="submit" disabled={loading}
+                        <button type="submit" disabled={isSubmitDisabled}
                             className="auth-field w-full h-12 mt-2 rounded-xl bg-white text-black font-semibold text-sm flex items-center justify-center gap-2 hover:bg-gray-100 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                             {loading ? (
-                                <><span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> Synchronizing...</>
+                                <><span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> Authenticating...</>
                             ) : isLogin ? (
                                 <><Zap size={15} /> Authenticate Protocol <ArrowRight size={14} /></>
                             ) : (

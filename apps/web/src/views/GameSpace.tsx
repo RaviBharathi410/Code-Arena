@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNav } from '../navigation/NavigationContext';
 import gsap from 'gsap';
-import { useBattleStore } from '../store/useBattleStore';
+import { useMatch } from '../contexts/MatchContext';
 import { useVoiceCommand } from '../hooks/useVoiceCommand';
 import { VoiceVisualizer } from '../components/ui/VoiceVisualizer';
 import {
@@ -27,21 +27,19 @@ import {
 import { useLayout } from '../components/layout/MainLayout';
 
 // ── Types ────────────────────────────────────────────────────────────────
-interface Problem {
-    id: string;
-    title: string;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
+import type { Problem as SharedProblem } from '../types';
+
+interface GameProblem extends SharedProblem {
     timeLimit: number; // in seconds
-    description: string;
+    initialCode: string;
     examples: { input: string; output: string; explanation?: string }[];
     constraints: string[];
-    initialCode: string;
     testCases: { input: any; expected: any }[];
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────
 
-const PROBLEMS: Problem[] = [
+const PROBLEMS: GameProblem[] = [
     {
         id: 'two-sum',
         title: 'Two Sum',
@@ -89,21 +87,18 @@ const PROBLEMS: Problem[] = [
 ];
 
 export const GameSpace: React.FC = () => {
-    const navigate = useNavigate();
-    const location = useLocation();
+    const { goToDashboard, params: navParams, currentPage } = useNav();
     const { setIsMenuOpen } = useLayout();
-    const [searchParams] = useSearchParams();
-    const mode = searchParams.get('mode');
-    const isPractice = mode === 'practice' || location.pathname.includes('practice');
+    const isPractice = currentPage === 'arena_practice' || navParams.practiceType != null;
 
     const {
-        initializeSocket, joinMatch, updateCode: syncCode,
+        connectSocket, joinMatch, updateCode: syncCode,
         problem: activeProblem, winner,
         opponentCode: liveOpponentCode, submitCode: socketSubmit
-    } = useBattleStore();
+    } = useMatch();
 
 
-    const [selectedProblem, setSelectedProblem] = useState(PROBLEMS[0]);
+    const [selectedProblem, setSelectedProblem] = useState<GameProblem>(PROBLEMS[0]);
     // Selected variables
     const [code, setCode] = useState(selectedProblem.initialCode);
     const [isComplete, setIsComplete] = useState(false);
@@ -137,24 +132,25 @@ export const GameSpace: React.FC = () => {
 
     // Initial State Setup
     useEffect(() => {
-        initializeSocket();
+        connectSocket();
 
-        // If we have a matchId in location state or search params
-        const matchId = searchParams.get('id') || (location.state as any)?.matchId;
+        // If we have a matchId in nav params
+        const matchId = navParams.matchId;
         if (matchId) {
             joinMatch(matchId);
         }
-    }, [searchParams, location.state, initializeSocket, joinMatch]); // Added dependencies
+    }, [navParams.matchId, connectSocket, joinMatch]);
 
     useEffect(() => {
         if (activeProblem) {
             setSelectedProblem({
                 ...activeProblem,
-                initialCode: activeProblem.baseCode || activeProblem.initialCode || '',
+                initialCode: activeProblem.baseCode || '',
                 timeLimit: 600,
-                constraints: [],
-                examples: []
-            });
+                constraints: activeProblem.constraints || [],
+                examples: activeProblem.examples || [],
+                testCases: activeProblem.testCases || [],
+            } as GameProblem);
             setCode(activeProblem.baseCode || '');
         }
     }, [activeProblem]);
@@ -301,8 +297,8 @@ export const GameSpace: React.FC = () => {
     const confirmExit = useCallback(() => {
         setIsRunning(false);
         setShowExitWarning(false);
-        navigate('/dashboard', { replace: true });
-    }, [navigate]);
+        goToDashboard();
+    }, [goToDashboard]);
 
     const handleSubmit = useCallback(() => {
         if (isSubmitting || isComplete) return;
@@ -707,7 +703,7 @@ export const GameSpace: React.FC = () => {
                                     <h3 className="text-3xl font-black tracking-tight uppercase italic">Match Analytics</h3>
                                     <p className="text-gray-500 text-[10px] font-mono mt-2 tracking-widest uppercase opacity-40">Session ID: {Math.random().toString(36).substr(2, 12).toUpperCase()}</p>
                                 </div>
-                                <button onClick={() => navigate('/dashboard')} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white hover:text-black transition-all group">
+                                <button onClick={() => goToDashboard()} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white hover:text-black transition-all group">
                                     <X size={24} />
                                 </button>
                             </div>
@@ -741,7 +737,7 @@ export const GameSpace: React.FC = () => {
                             </div>
 
                             <button
-                                onClick={() => navigate('/dashboard')}
+                                onClick={() => goToDashboard()}
                                 className="w-full py-8 rounded-[2rem] bg-white text-black font-black uppercase tracking-[0.3em] text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_50px_rgba(255,255,255,0.1)]"
                             >
                                 Return to Previous Sector

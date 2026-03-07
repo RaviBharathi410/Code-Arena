@@ -29,6 +29,29 @@ router.get('/', authMiddleware, async (req: any, res) => {
     }
 });
 
+router.get('/recent', authMiddleware, async (req: any, res) => {
+    try {
+        const userId = (req.query.userId as string) || req.user.id;
+        const recentMatches = await db
+            .select()
+            .from(matches)
+            .where(
+                or(
+                    eq(matches.player1Id, userId),
+                    eq(matches.player2Id, userId)
+                )
+            )
+            .orderBy(desc(matches.createdAt))
+            .limit(10) // reasonable limit
+            .all();
+
+        res.json(recentMatches);
+    } catch (err) {
+        console.error('Error fetching recent matches:', err);
+        res.status(500).json({ message: 'Error fetching recent matches' });
+    }
+});
+
 // GET /api/matches/:id — get a single match by id
 router.get('/:id', authMiddleware, async (req: any, res) => {
     try {

@@ -1,89 +1,65 @@
 import { create } from 'zustand';
-import axios from 'axios';
-import { useAuthStore } from './useAuthStore';
-
-interface Problem {
-    id: string;
-    title: string;
-    description: string;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
-    baseCode: string;
-    testCases: any[];
-}
-
-interface Tournament {
-    id: string;
-    title: string;
-    status: string;
-    startTime: string;
-    bracketData: any;
-}
-
-interface LeaderboardEntry {
-    userId: string;
-    username: string;
-    rating: number;
-    rank: number;
-    wins: number;
-}
+import api from '../lib/api';
+import type { Problem, Tournament, LeaderboardEntry, AsyncStatus } from '../types';
 
 interface ArenaState {
     problems: Problem[];
+    problemsStatus: AsyncStatus;
+    problemsError: string | null;
+
     tournaments: Tournament[];
+    tournamentsStatus: AsyncStatus;
+    tournamentsError: string | null;
+
     leaderboard: LeaderboardEntry[];
-    isLoading: boolean;
-    error: string | null;
+    leaderboardStatus: AsyncStatus;
+    leaderboardError: string | null;
 
     fetchProblems: () => Promise<void>;
     fetchTournaments: () => Promise<void>;
     fetchLeaderboard: () => Promise<void>;
 }
 
-const API_URL = 'http://localhost:3001/api';
-
 export const useArenaStore = create<ArenaState>((set) => ({
     problems: [],
+    problemsStatus: 'idle',
+    problemsError: null,
+
     tournaments: [],
+    tournamentsStatus: 'idle',
+    tournamentsError: null,
+
     leaderboard: [],
-    isLoading: false,
-    error: null,
+    leaderboardStatus: 'idle',
+    leaderboardError: null,
 
     fetchProblems: async () => {
-        set({ isLoading: true });
+        set({ problemsStatus: 'loading', problemsError: null });
         try {
-            const token = useAuthStore.getState().token;
-            const response = await axios.get(`${API_URL}/problems`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            set({ problems: response.data, isLoading: false });
+            const response = await api.get('/problems');
+            set({ problems: response.data, problemsStatus: 'success' });
         } catch (error: any) {
-            set({ error: error.message, isLoading: false });
+            set({ problemsError: error.message, problemsStatus: 'error' });
         }
     },
 
     fetchTournaments: async () => {
-        set({ isLoading: true });
+        set({ tournamentsStatus: 'loading', tournamentsError: null });
         try {
-            const token = useAuthStore.getState().token;
-            const response = await axios.get(`${API_URL}/tournaments`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            set({ tournaments: response.data, isLoading: false });
+            const response = await api.get('/tournaments');
+            set({ tournaments: response.data, tournamentsStatus: 'success' });
         } catch (error: any) {
-            set({ error: error.message, isLoading: false });
+            set({ tournamentsError: error.message, tournamentsStatus: 'error' });
         }
     },
 
     fetchLeaderboard: async () => {
-        set({ isLoading: true });
+        set({ leaderboardStatus: 'loading', leaderboardError: null });
         try {
-            const token = useAuthStore.getState().token;
-            const response = await axios.get(`${API_URL}/leaderboard`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            set({ leaderboard: response.data, isLoading: false });
+            const response = await api.get('/leaderboard');
+            set({ leaderboard: response.data, leaderboardStatus: 'success' });
         } catch (error: any) {
-            set({ error: error.message, isLoading: false });
+            set({ leaderboardError: error.message, leaderboardStatus: 'error' });
         }
-    }
+    },
 }));

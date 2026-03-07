@@ -1,28 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import axios from 'axios';
-
-interface User {
-    id: string;
-    username: string;
-    email?: string;
-    rating?: number;
-    level?: number;
-    experience?: number;
-    wins?: number;
-    losses?: number;
-}
+import api from '../lib/api';
+import type { User } from '../types';
 
 interface AuthState {
     user: User | null;
     token: string | null;
     isAuthenticated: boolean;
+    authLoading: boolean;
+    authError: string | null;
+
     setAuth: (user: User, token: string) => void;
     logout: () => void;
     fetchProfile: () => Promise<void>;
 }
-
-const API_URL = 'http://localhost:3001';
 
 export const useAuthStore = create<AuthState>()(
     persist(
@@ -30,20 +21,37 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             token: null,
             isAuthenticated: false,
-            setAuth: (user: User, token: string) => set({ user: { ...user }, token, isAuthenticated: true }),
-            logout: () => set({ user: null, token: null, isAuthenticated: false }),
+            authLoading: false,
+            authError: null,
+
+            setAuth: (user: User, token: string) => set({
+                user: { ...user },
+                token,
+                isAuthenticated: true,
+                authLoading: false,
+                authError: null,
+            }),
+
+            logout: () => set({
+                user: null,
+                token: null,
+                isAuthenticated: false,
+                authLoading: false,
+                authError: null,
+            }),
+
             fetchProfile: async () => {
                 const token = get().token;
                 if (!token) return;
 
+                set({ authLoading: true, authError: null });
                 try {
-                    const response = await axios.get(`${API_URL}/api/auth/me`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                    set({ user: response.data });
-                } catch (error) {
-                    console.error('Failed to fetch profile:', error);
-                    if (axios.isAxiosError(error) && error.response?.status === 401) {
+                    const response = await api.get('/auth/me');
+                    set({ user: response.data, authLoading: false });
+                } catch (error: any) {
+                    const message = error.response?.data?.message || error.message || 'Failed to fetch profile';
+                    set({ authError: message, authLoading: false });
+                    if (error.response?.status === 401) {
                         get().logout();
                     }
                 }
