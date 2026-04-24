@@ -43,7 +43,7 @@ const ConfirmLeaveModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="text-xl">⚠</span>
                 </div>
                 <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Warning: Combat Active</h3>
+                    <h3 className="text-xl font-black uppercase tracking-tighter text-white">Warning: Combat Active</h3>
                     <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Protocol Abandonment Imminent</p>
                 </div>
             </div>
@@ -75,8 +75,8 @@ const MatchResultsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { goToDashboard } = useNav();
 
     return (
-        <div className="w-full max-w-md bg-[#0a0a0a] border border-cyan-500/30 rounded-3xl p-8 space-y-6 shadow-[0_0_50px_rgba(6,182,212,0.1)]">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Match Complete</h3>
+        <div className="w-full max-w-md bg-[#0a0a0a] border border-accent-secondary/30 rounded-3xl p-8 space-y-6 shadow-[0_0_50px_rgba(124,58,237,0.12)]">
+            <h3 className="text-xl font-black uppercase tracking-tighter text-white">Match Complete</h3>
             <p className="text-gray-400 text-sm">Results have been recorded.</p>
             <button
                 onClick={() => { onClose(); goToDashboard(); }}

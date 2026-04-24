@@ -115,7 +115,7 @@ export const ExperienceHero = () => {
                     </div>
 
                     <div className="max-w-4xl lg:-translate-y-8 pr-12">
-                        <h1 className="text-[clamp(3.5rem,9.5vw,11.5rem)] font-black leading-[0.87] tracking-tighter text-white uppercase italic-none">
+                        <h1 className="text-[clamp(3.5rem,9.5vw,11.5rem)] font-black leading-[0.87] tracking-tighter text-white uppercase">
                             CREATIVE <br /> <span className="text-outline">AGENCY</span>
                         </h1>
                         <p className="mt-8 font-mono text-[11px] text-white/40 uppercase tracking-[0.35em] max-w-sm leading-relaxed">
@@ -162,7 +162,7 @@ export const ExperienceHero = () => {
                                 </div>
                             ) : (
                                 <h3 className="text-sm font-medium text-white/70 mt-3 leading-snug">
-                                    Transforming static interfaces into <span className="italic text-white">narrative apertures</span>.
+                                    Transforming static interfaces into <span className="text-white">narrative apertures</span>.
                                 </h3>
                             )}
                         </div>

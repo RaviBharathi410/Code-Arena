@@ -150,13 +150,13 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                         <X size={20} />
                     </button>
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                        <div className="w-10 h-10 rounded-xl bg-accent-secondary/10 flex items-center justify-center text-accent-secondary">
                             <Activity size={24} />
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-white tracking-tight">Cyber Battle Arena</h2>
                             <div className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest font-semibold">
-                                <span className="text-cyan-400">Live Match</span>
+                                <span className="text-accent-secondary">Live Match</span>
                                 <span>•</span>
                                 <span className="font-mono">{matchId || 'Protocol Nexus-12'}</span>
                             </div>
@@ -187,8 +187,8 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
             <main className="flex-1 min-h-0">
                 {!isMatchActive ? (
                     <div className="h-full flex items-center justify-center">
-                        <GlassCard className="max-w-md w-full text-center border-cyan-400/20 p-10">
-                            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mx-auto mb-6">
+                        <GlassCard className="max-w-md w-full text-center border-accent-secondary/20 p-10">
+                            <div className="w-16 h-16 rounded-2xl bg-accent-secondary/10 flex items-center justify-center text-accent-secondary mx-auto mb-6">
                                 <Sword size={32} />
                             </div>
                             <h1 className="text-3xl font-bold mb-4">Initialize Battle?</h1>
@@ -207,7 +207,7 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                         {/* Objectives Panel */}
                         <div className="lg:col-span-1 space-y-6">
                             <GlassCard className="h-full flex flex-col border-white/5 battle-card">
-                                <div className="flex items-center gap-2 mb-4 text-cyan-400">
+                                <div className="flex items-center gap-2 mb-4 text-accent-secondary">
                                     <Target size={18} />
                                     <h3 className="font-bold uppercase tracking-wider text-sm">Objectives</h3>
                                 </div>
@@ -228,13 +228,13 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                             <div className="flex flex-col space-y-3 battle-card h-full">
                                 <div className="flex items-center justify-between px-2">
                                     <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase">
-                                        <div className="w-2 h-2 rounded-full bg-cyan-500" />
+                                        <div className="w-2 h-2 rounded-full bg-accent-secondary" />
                                         <span>Local Uplink [{currentUser.username || 'You'}]</span>
                                     </div>
                                     <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
                                         <button
                                             onClick={() => setActiveTab('code')}
-                                            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${activeTab === 'code' ? 'bg-cyan-500/20 text-cyan-400' : 'text-gray-500 hover:text-white'}`}
+                                            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${activeTab === 'code' ? 'bg-accent-secondary/15 text-accent-secondary' : 'text-gray-500 hover:text-white'}`}
                                         >
                                             <Code2 size={12} /> Code
                                         </button>
@@ -247,7 +247,7 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                                     </div>
                                 </div>
 
-                                <GlassCard className="flex-1 border-cyan-500/30 p-0 overflow-hidden group">
+                                <GlassCard className="flex-1 border-accent-secondary/25 p-0 overflow-hidden group">
                                     {activeTab === 'code' ? (
                                         <Editor
                                             height="100%"
@@ -320,13 +320,13 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                         <h2 className="text-4xl font-bold mb-2">
                             {winner === 'you' ? 'Victory Secured' : 'Match Terminated'}
                         </h2>
-                        <p className="text-gray-400 mb-8 italic">
+                        <p className="text-gray-400 mb-8">
                             {winner === 'you' ? 'Excellent performance, Operator. Sequence correct.' : 'Protocol failure detected. Faster sequence required.'}
                         </p>
 
                         {/* Big-O Complexity Metrics Card */}
                         <div className="bg-black/50 rounded-2xl border border-white/10 p-6 mb-8 text-left">
-                            <div className="flex items-center gap-2 mb-4 text-cyan-400">
+                            <div className="flex items-center gap-2 mb-4 text-accent-secondary">
                                 <BrainCircuit size={18} />
                                 <h3 className="font-bold uppercase tracking-wider text-sm">Algorithm Analysis</h3>
                             </div>
@@ -356,7 +356,7 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                         <div className="flex items-center gap-4 text-red-500">
                             <Shield size={32} />
                             <div>
-                                <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Warning: Combat Active</h3>
+                                <h3 className="text-xl font-black uppercase tracking-tighter text-white">Warning: Combat Active</h3>
                                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Protocol Abandonment Imminent</p>
                             </div>
                         </div>

@@ -4,6 +4,7 @@ import { useNav, PAGES } from './NavigationContext';
 import { useAuthStore } from '../store/useAuthStore';
 import MainLayout from '../components/layout/MainLayout';
 import { Login } from '../views/Login';
+import { Landing } from '../views/Landing';
 import { Dashboard } from '../views/Dashboard';
 import { GameSpace } from '../views/GameSpace';
 import { BattleArena } from '../views/BattleArena';
@@ -13,6 +14,7 @@ import type { PageId } from './navigationState';
 // ── Page Map ──────────────────────────────────────────────────────────────
 
 const PAGE_MAP: Record<PageId, React.FC<any>> = {
+    [PAGES.LANDING]: Landing,
     [PAGES.LOGIN]: Login,
     [PAGES.DASHBOARD]: Dashboard,
     [PAGES.BATTLE]: Dashboard,
@@ -29,16 +31,29 @@ const PAGE_MAP: Record<PageId, React.FC<any>> = {
 };
 
 // Pages that don't require authentication
-const PUBLIC_PAGES = new Set<PageId>([PAGES.LOGIN]);
+const PUBLIC_PAGES = new Set<PageId>([PAGES.LANDING, PAGES.LOGIN]);
 
 // Pages that render outside MainLayout
-const NO_LAYOUT_PAGES = new Set<PageId>([PAGES.LOGIN]);
+const NO_LAYOUT_PAGES = new Set<PageId>([PAGES.LANDING, PAGES.LOGIN]);
 
 // ── NavigatorRoot ─────────────────────────────────────────────────────────
 
 const NavigatorRoot: React.FC = () => {
     const { currentPage, params } = useNav();
-    const { isAuthenticated, user } = useAuthStore();
+    const { isAuthenticated, user, fetchProfile, authLoading } = useAuthStore();
+
+    // Verify session on initial load
+    React.useEffect(() => {
+        fetchProfile();
+    }, [fetchProfile]);
+
+    if (authLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-[#050507]">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+            </div>
+        );
+    }
 
     // Auth guard: redirect to login if not authenticated and page is protected
     if (!PUBLIC_PAGES.has(currentPage) && !isAuthenticated) {

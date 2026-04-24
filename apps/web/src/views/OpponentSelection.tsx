@@ -86,8 +86,8 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                             {connected ? 'Signal Strength: Maximum' : 'Connecting to Uplink...'}
                         </span>
                     </div>
-                    <h1 className="text-5xl md:text-6xl font-black tracking-tighter uppercase italic">
-                        Select <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">Opponent</span>
+                    <h1 className="text-5xl md:text-6xl font-black tracking-tighter uppercase">
+                        Select <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary to-accent-secondary">Opponent</span>
                     </h1>
                 </header>
 
@@ -100,7 +100,7 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search operator registry..."
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm font-bold placeholder-gray-600 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm font-bold placeholder-gray-600 focus:outline-none focus:border-accent-secondary/40 transition-colors"
                             />
                         </div>
 
@@ -117,29 +117,29 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                                         key={opp.id}
                                         onClick={() => setSelectedOpponent(opp)}
                                         className={`opponent-card p-6 rounded-[2.5rem] border cursor-pointer transition-all duration-300 relative overflow-hidden group ${selectedOpponent?.id === opp.id
-                                            ? 'bg-white/10 border-cyan-500/50'
+                                            ? 'bg-white/10 border-accent-secondary/50'
                                             : 'bg-white/5 border-white/10 hover:border-white/20'
                                             }`}
                                     >
                                         <div className="flex items-center gap-4 mb-8">
-                                            <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-2xl flex items-center justify-center font-black text-black">
+                                            <div className="w-12 h-12 bg-gradient-to-br from-accent-primary to-accent-secondary rounded-2xl flex items-center justify-center font-black text-black">
                                                 {opp.username[0].toUpperCase()}
                                             </div>
                                             <div>
-                                                <h3 className="font-black text-lg italic uppercase tracking-tighter">{opp.username}</h3>
-                                                <div className="flex items-center gap-2 text-[8px] text-cyan-500 uppercase font-black tracking-[0.2em]">
-                                                    <div className="w-1 h-1 rounded-full bg-cyan-500 animate-pulse" /> Online
+                                                <h3 className="font-black text-lg uppercase tracking-tighter">{opp.username}</h3>
+                                                <div className="flex items-center gap-2 text-[8px] text-accent-secondary uppercase font-black tracking-[0.2em]">
+                                                    <div className="w-1 h-1 rounded-full bg-accent-secondary animate-pulse" /> Online
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-end">
                                             <div>
                                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Skill Tier</p>
-                                                <p className="font-black italic text-sm">ARCHITECT III</p>
+                                                <p className="font-black text-sm">ARCHITECT III</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Rank</p>
-                                                <p className="text-2xl font-black italic text-white tracking-tighter">1,240 RP</p>
+                                                <p className="text-2xl font-black text-white tracking-tighter">1,240 RP</p>
                                             </div>
                                         </div>
                                     </div>
@@ -152,14 +152,14 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                         <div className="p-10 rounded-[3.5rem] bg-white/5 border border-white/10 flex flex-col justify-between min-h-[500px] header-element sticky top-8">
                             <div>
                                 <div className="flex items-center gap-3 mb-10">
-                                    <Target className="text-cyan-500" size={24} />
-                                    <h2 className="font-black text-xl uppercase italic tracking-tighter">Target Acquisition</h2>
+                                    <Target className="text-accent-secondary" size={24} />
+                                    <h2 className="font-black text-xl uppercase tracking-tighter">Target Acquisition</h2>
                                 </div>
 
                                 {selectedOpponent ? (
                                     <div className="space-y-8">
-                                        <div className="p-6 bg-cyan-500/5 rounded-3xl border border-cyan-500/10">
-                                            <p className="text-xs text-gray-400 leading-relaxed italic mb-4 font-light">
+                                        <div className="p-6 bg-accent-secondary/5 rounded-3xl border border-accent-secondary/10">
+                                            <p className="text-xs text-gray-400 leading-relaxed mb-4 font-light">
                                                 "Valid target identified. Prepare for neural insertion. Efficiency is mandatory."
                                             </p>
                                             <div className="flex items-center gap-2 text-[10px] text-green-400 uppercase font-black tracking-widest">
@@ -170,11 +170,11 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                                         <div className="space-y-4">
                                             <div className="flex justify-between items-center text-[10px] font-black">
                                                 <span className="text-gray-500 uppercase tracking-widest">Opponent</span>
-                                                <span className="text-white uppercase italic">{selectedOpponent.username}</span>
+                                                <span className="text-white uppercase">{selectedOpponent.username}</span>
                                             </div>
                                             <div className="flex justify-between items-center text-[10px] font-black">
                                                 <span className="text-gray-500 uppercase tracking-widest">Risk Level</span>
-                                                <span className="text-amber-500 italic">MODERATE</span>
+                                                <span className="text-amber-500">MODERATE</span>
                                             </div>
                                         </div>
                                     </div>

@@ -1,13 +1,12 @@
 import { db } from './db';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import path from 'path';
 
 async function runMigrations() {
-    console.log('--- ARENA DATABASE MIGRATION (SQLITE) ---');
+    console.log('--- ARENA DATABASE MIGRATION (POSTGRES/NEON) ---');
     try {
-        console.log('Synchronizing schema with SQLite local storage...');
-        // @ts-ignore
-        migrate(db, { migrationsFolder: path.join(__dirname, '../drizzle') });
+        console.log('Synchronizing schema with Neon Postgres...');
+        await migrate(db, { migrationsFolder: path.join(__dirname, '../drizzle') });
         console.log('Migrations completed successfully. System integrity: OPTIMAL.');
     } catch (err: any) {
         console.error('Migration failed:', err.message);

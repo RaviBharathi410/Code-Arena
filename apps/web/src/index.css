@@ -6,11 +6,12 @@
     --bg-primary: #050507;
     --bg-secondary: #0d0d12;
     --bg-surface: #12121a;
-    --accent-primary: #00f0ff;
+    /* unified landing + arena palette (violet-first) */
+    --accent-primary: #9f7bff;
     --accent-secondary: #7c3aed;
-    --accent-glow: rgba(0, 240, 255, 0.15);
+    --accent-glow: rgba(124, 58, 237, 0.16);
     --border-subtle: rgba(255, 255, 255, 0.05);
-    --border-bright: rgba(0, 240, 255, 0.3);
+    --border-bright: rgba(124, 58, 237, 0.35);
     --text-primary: #ffffff;
     --text-secondary: #a1a1aa;
     --text-muted: #71717a;
@@ -25,21 +26,21 @@
     --card-foreground: 0 0% 100%;
     --popover: 240 7% 8%;
     --popover-foreground: 0 0% 100%;
-    --primary: 183 100% 50%;
-    /* #00f0ff cyan */
-    --primary-foreground: 240 5% 4%;
-    --secondary: 263 69% 52%;
+    --primary: 263 69% 52%;
     /* #7c3aed violet */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 258 100% 74%;
+    /* #9f7bff lavender */
     --secondary-foreground: 0 0% 100%;
     --muted: 240 5% 10%;
     --muted-foreground: 240 5% 65%;
-    --accent: 183 100% 50%;
-    --accent-foreground: 240 5% 4%;
+    --accent: 263 69% 52%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 100% / 0.05;
     --input: 0 0% 100% / 0.08;
-    --ring: 183 100% 50%;
+    --ring: 263 69% 52%;
     --radius: 0.5rem;
 }
 
@@ -49,7 +50,7 @@
     html,
     body,
     #root {
-        @apply h-full overflow-hidden;
+        @apply h-full;
     }
 
     body {

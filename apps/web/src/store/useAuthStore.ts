@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import api from '../lib/api';
 import type { User } from '../types';
+import api from '../lib/api';
 
 interface AuthState {
     user: User | null;
@@ -35,29 +35,46 @@ export const useAuthStore = create<AuthState>()(
             logout: async () => {
                 try {
                     await api.post('/auth/logout');
-                } catch (_) { /* ignore network errors on logout */ }
-                set({
-                    user: null,
-                    token: null,
-                    isAuthenticated: false,
-                    authLoading: false,
-                    authError: null,
-                });
+                } catch (e) {
+                    console.error('Logout error', e);
+                } finally {
+                    set({
+                        user: null,
+                        token: null,
+                        isAuthenticated: false,
+                        authLoading: false,
+                        authError: null,
+                    });
+                }
             },
 
             fetchProfile: async () => {
                 const token = get().token;
                 if (!token) return;
 
+                // Force clear legacy mock tokens immediately
+                if (token === 'local-token') {
+                    get().logout();
+                    return;
+                }
+
                 set({ authLoading: true, authError: null });
                 try {
-                    const response = await api.get('/auth/me');
-                    set({ user: response.data, authLoading: false });
+                    const response = await api.get('/auth/profile', {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    
+                    set({
+                        user: response.data,
+                        authLoading: false
+                    });
                 } catch (error: any) {
-                    const message = error.response?.data?.message || error.message || 'Failed to fetch profile';
-                    set({ authError: message, authLoading: false });
-                    if (error.response?.status === 401) {
-                        get().logout();
+                    const message = error?.response?.data?.message || error?.message || 'Failed to fetch profile';
+                    // If 401, token might be invalid or expired without refresh
+                    if (error?.response?.status === 401) {
+                         set({ user: null, token: null, isAuthenticated: false, authError: 'Session expired', authLoading: false });
+                    } else {
+                         set({ authError: message, authLoading: false });
                     }
                 }
             },

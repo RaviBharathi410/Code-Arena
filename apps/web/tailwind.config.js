@@ -16,7 +16,7 @@ export default {
                 },
                 border: {
                     subtle: 'rgba(255, 255, 255, 0.05)',
-                    bright: 'rgba(0, 240, 255, 0.3)',
+                    bright: 'rgba(124, 58, 237, 0.35)',
                 },
                 text: {
                     primary: '#ffffff',
@@ -49,9 +49,10 @@ export default {
                 accent: {
                     DEFAULT: 'hsl(var(--accent))',
                     foreground: 'hsl(var(--accent-foreground))',
-                    primary: '#00f0ff',
+                    // landing + arena unified palette (violet-first)
+                    primary: '#9f7bff',
                     secondary: '#7c3aed',
-                    glow: 'rgba(0, 240, 255, 0.15)',
+                    glow: 'rgba(124, 58, 237, 0.16)',
                 },
                 destructive: {
                     DEFAULT: 'hsl(var(--destructive))',
@@ -70,7 +71,7 @@ export default {
                 mono: ['JetBrains Mono', 'monospace'],
             },
             backgroundImage: {
-                'gradient-main': 'radial-gradient(circle at 20% 20%, rgba(0,240,255,0.08), transparent 40%), radial-gradient(circle at 80% 80%, rgba(124,58,237,0.08), transparent 40%)',
+                'gradient-main': 'radial-gradient(circle at 18% 22%, rgba(159,123,255,0.10), transparent 42%), radial-gradient(circle at 82% 78%, rgba(124,58,237,0.10), transparent 45%)',
             }
         },
     },

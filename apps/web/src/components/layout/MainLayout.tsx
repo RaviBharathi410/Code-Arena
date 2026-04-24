@@ -54,13 +54,13 @@ const CSSBackground: React.FC<{ isLight?: boolean }> = ({ isLight }) => (
         <div className="absolute inset-0" style={{
             background: isLight
                 ? 'radial-gradient(ellipse 80% 80% at 20% 30%, rgba(0,0,0,0.03) 0%, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 70%, rgba(0,0,0,0.02) 0%, transparent 60%)'
-                : 'radial-gradient(ellipse 80% 80% at 20% 30%, #111 0%, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 70%, #0d0d0d 0%, transparent 60%)',
+                : 'radial-gradient(ellipse 80% 80% at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 70%, rgba(159,123,255,0.12) 0%, transparent 60%)',
             animation: 'meshPulse 8s ease-in-out infinite alternate',
         }} />
         {[
-            { size: 320, x: '10%', y: '20%', delay: '0s', dur: '12s', color: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)' },
-            { size: 480, x: '65%', y: '55%', delay: '3s', dur: '15s', color: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)' },
-            { size: 200, x: '80%', y: '15%', delay: '6s', dur: '10s', color: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)' },
+            { size: 360, x: '10%', y: '18%', delay: '0s', dur: '12s', color: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(124,58,237,0.14)' },
+            { size: 520, x: '64%', y: '56%', delay: '3s', dur: '15s', color: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(159,123,255,0.10)' },
+            { size: 240, x: '78%', y: '14%', delay: '6s', dur: '10s', color: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(124,58,237,0.12)' },
         ].map((orb, i) => (
             <div key={i} className="absolute rounded-full pointer-events-none" style={{
                 width: orb.size, height: orb.size, left: orb.x, top: orb.y,
@@ -69,12 +69,24 @@ const CSSBackground: React.FC<{ isLight?: boolean }> = ({ isLight }) => (
                 filter: 'blur(40px)',
             }} />
         ))}
-        <div className={`absolute inset-0 opacity-5`} style={{
-            backgroundImage: isLight
-                ? 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)'
-                : 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
-        }} />
+        {/* Hex pattern overlay (matches landing) */}
+        <div className="absolute inset-0 opacity-[0.22] pointer-events-none" style={{
+            maskImage: 'radial-gradient(circle at 50% 30%, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.20) 58%, rgba(0,0,0,0) 86%)',
+        }}>
+            <svg className="h-full w-full" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="hexPatternLayout" width="56" height="48.5" patternUnits="userSpaceOnUse">
+                        <path
+                            d="M14 0 L42 0 L56 24.25 L42 48.5 L14 48.5 L0 24.25 Z"
+                            fill="none"
+                            stroke={isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}
+                            strokeWidth="1"
+                        />
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#hexPatternLayout)" />
+            </svg>
+        </div>
         <style>{`
           @keyframes meshPulse { from { opacity: 0.3; } to { opacity: 0.55; } }
           @keyframes orbFloat { from { transform: translate(0,0) scale(1); } to { transform: translate(20px, -30px) scale(1.08); } }
@@ -88,15 +100,17 @@ const LiquidBackground = ({ isLight }: { isLight: boolean }) => {
     const { viewport } = useThree();
     const uniforms = useMemo(() => ({
         uTime: { value: 0 },
-        uColor1: { value: new THREE.Color(isLight ? '#f3f4f6' : '#000000') },
-        uColor2: { value: new THREE.Color(isLight ? '#e5e7eb' : '#111111') },
-        uColor3: { value: new THREE.Color(isLight ? '#ffffff' : '#0a0a0a') }
+        uColor1: { value: new THREE.Color(isLight ? '#f3f4f6' : '#050507') },
+        uColor2: { value: new THREE.Color(isLight ? '#e5e7eb' : '#0b0b12') },
+        uColor3: { value: new THREE.Color(isLight ? '#ffffff' : '#140b1f') },
+        uAccent: { value: new THREE.Color(isLight ? '#7c3aed' : '#7c3aed') },
     }), [isLight]);
 
     useEffect(() => {
-        uniforms.uColor1.value.set(isLight ? '#f3f4f6' : '#000000');
-        uniforms.uColor2.value.set(isLight ? '#e5e7eb' : '#111111');
-        uniforms.uColor3.value.set(isLight ? '#ffffff' : '#0a0a0a');
+        uniforms.uColor1.value.set(isLight ? '#f3f4f6' : '#050507');
+        uniforms.uColor2.value.set(isLight ? '#e5e7eb' : '#0b0b12');
+        uniforms.uColor3.value.set(isLight ? '#ffffff' : '#140b1f');
+        uniforms.uAccent.value.set('#7c3aed');
     }, [isLight, uniforms]);
 
     useFrame((state) => {
@@ -130,12 +144,18 @@ const LiquidBackground = ({ isLight }: { isLight: boolean }) => {
             void main(){vUv=uv;vec3 pos=position;
             float noise=snoise(vec2(pos.x*2.+uTime*.1,pos.y*2.+uTime*.1));
             pos.z+=noise*.1;gl_Position=projectionMatrix*modelViewMatrix*vec4(pos,1.);}`}
-                fragmentShader={`uniform vec3 uColor1,uColor2,uColor3;uniform float uTime;varying vec2 vUv;
+                fragmentShader={`uniform vec3 uColor1,uColor2,uColor3,uAccent;uniform float uTime;varying vec2 vUv;
+            float hash21(vec2 p){p=fract(p*vec2(123.34,345.45));p+=dot(p,p+34.345);return fract(p.x*p.y);}
             void main(){vec2 p=vUv;
-            vec3 color=mix(uColor1,uColor2,p.y+sin(uTime*.5)*.1);
-            color=mix(color,uColor3,p.x+cos(uTime*.3)*.1);
-            float grid=step(.98,fract(p.x*20.))+step(.98,fract(p.y*20.));
-            color+=grid*.05;gl_FragColor=vec4(color,1.);}`}
+            vec3 color=mix(uColor1,uColor2,p.y+sin(uTime*.35)*.08);
+            color=mix(color,uColor3,p.x+cos(uTime*.25)*.08);
+            // subtle violet lift near center/top, like landing glow
+            float vign=1.0-smoothstep(0.15,0.95,length(p-vec2(0.5,0.30))*1.25);
+            color=mix(color,uAccent, vign*0.12);
+            // faint micro-noise
+            float n=hash21(p*vec2(900.0,600.0));
+            color += (n-0.5)*0.015;
+            gl_FragColor=vec4(color,1.);}`}
             />
         </mesh>
     );
@@ -239,8 +259,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
                     <div className="p-8 h-full flex flex-col">
                         <div className="flex justify-between items-center mb-12">
                             <div className="flex items-center gap-3">
-                                <Activity className="text-cyan-500" size={24} />
-                                <span className={`text-xl font-black italic tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>Arena<span className={`${isLight ? 'text-gray-400' : 'text-gray-600'}`}>Protocol</span></span>
+                                <Activity className="text-accent-secondary" size={24} />
+                                <span className={`text-xl font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>Arena<span className={`${isLight ? 'text-gray-400' : 'text-gray-600'}`}>Protocol</span></span>
                             </div>
                             <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-xl lg:hidden">
                                 <X size={20} />

@@ -29,8 +29,8 @@ export const NeonButton: React.FC<NeonButtonProps> = ({
     };
 
     const variantClasses = {
-        primary: 'bg-cyan-500 hover:bg-cyan-400 text-black font-semibold',
-        secondary: 'border border-white/20 hover:border-cyan-400 text-white',
+        primary: 'bg-accent-secondary hover:bg-accent-secondary/90 text-white font-semibold',
+        secondary: 'border border-white/20 hover:border-accent-secondary/60 text-white',
         danger: 'bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30',
     };
 
@@ -39,7 +39,7 @@ export const NeonButton: React.FC<NeonButtonProps> = ({
             ref={buttonRef}
             className={cn(
                 'rounded-xl transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden',
-                'active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
+                'active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-secondary focus-visible:ring-offset-2 focus-visible:ring-offset-black',
                 sizeClasses[size],
                 variantClasses[variant],
                 className

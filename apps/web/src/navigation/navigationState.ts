@@ -1,6 +1,7 @@
 // ── Page & Modal Registries ───────────────────────────────────────────────
 
 export const PAGES = {
+    LANDING: 'landing',
     LOGIN: 'login',
     DASHBOARD: 'dashboard',
     BATTLE: 'battle',
@@ -28,6 +29,7 @@ export type ModalId = (typeof MODALS)[keyof typeof MODALS];
 // ── Path <-> Page Bidirectional Maps ──────────────────────────────────────
 
 export const PAGE_TO_PATH: Record<PageId, string> = {
+    [PAGES.LANDING]: '/',
     [PAGES.LOGIN]: '/login',
     [PAGES.DASHBOARD]: '/dashboard',
     [PAGES.BATTLE]: '/battle',
@@ -49,6 +51,7 @@ export function pathToPage(pathname: string): { page: PageId; params: NavParams 
 
     // Static matches first
     const staticMap: Record<string, PageId> = {
+        '/': PAGES.LANDING,
         '/login': PAGES.LOGIN,
         '/dashboard': PAGES.DASHBOARD,
         '/battle': PAGES.BATTLE,
@@ -110,7 +113,7 @@ export interface NavigationState {
 }
 
 export const initialNavigationState: NavigationState = {
-    currentPage: PAGES.DASHBOARD,
+    currentPage: PAGES.LANDING,
     history: [],
     params: {},
     modal: null,

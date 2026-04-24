@@ -21,6 +21,7 @@ interface NavigationContextType {
     dispatch: React.Dispatch<NavigationAction>;
 
     // Named action creators — the antigravity interface
+    goToLanding: () => void;
     goToDashboard: () => void;
     goToLogin: () => void;
     goToBattle: () => void;
@@ -105,6 +106,11 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     // ── Named Action Creators ─────────────────────────────────────────
 
+    const goToLanding = useCallback(() => {
+        isSyncingToUrl.current = true;
+        dispatch({ type: 'RESET', page: PAGES.LANDING });
+        routerNavigate('/', { replace: true });
+    }, [routerNavigate]);
     const goToDashboard = useCallback(() => navigateTo(PAGES.DASHBOARD), [navigateTo]);
     const goToLogin = useCallback(() => {
         isSyncingToUrl.current = true;
@@ -152,6 +158,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const value: NavigationContextType = {
         state,
         dispatch,
+        goToLanding,
         goToDashboard,
         goToLogin,
         goToBattle,

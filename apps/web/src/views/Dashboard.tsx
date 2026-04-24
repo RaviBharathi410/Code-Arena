@@ -4,7 +4,6 @@ import gsap from 'gsap';
 import { useArenaStore } from '../store/useArenaStore';
 import { TournamentHub } from './TournamentHub';
 import { useLayout } from '../components/layout/MainLayout';
-import api from '../lib/api';
 import { User, LeaderboardEntry, Match } from '../types';
 
 import {
@@ -82,7 +81,7 @@ const SkillRadar: React.FC<{ isLight: boolean; skills?: { name: string; value: n
                     return (
                         <text
                             key={i} x={x} y={y} textAnchor="middle" fontSize="7" fontWeight="900"
-                            fill={isLight ? "#000" : "#fff"} className="uppercase tracking-[0.15em] opacity-40 italic"
+                            fill={isLight ? "#000" : "#fff"} className="uppercase tracking-[0.15em] opacity-40"
                         >
                             {s.name}
                         </text>
@@ -161,12 +160,9 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
         setIsLoading(true);
         setError(null);
         try {
-            const [lbRes, mRes] = await Promise.all([
-                api.get('/leaderboard?limit=8'),
-                api.get(`/matches/recent?userId=${currentUser.id}`)
-            ]);
-            setLeaderboardData(lbRes.data);
-            setRecentMatchesData(mRes.data);
+            // Offline mode: use local UI data only.
+            setLeaderboardData([]);
+            setRecentMatchesData([]);
         } catch (err: any) {
             console.error('Failed to fetch dashboard data:', err);
             setError('Intelligence uplink failed. System compromised.');
@@ -220,14 +216,14 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                     <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                     <span className={`text-xs tracking-wider uppercase ${isLight ? 'text-gray-600' : 'text-gray-300'}`}>System Status: Optimal</span>
                 </div>
-                <h1 className="text-5xl md:text-6xl font-black tracking-tighter leading-tight italic uppercase">
+                <h1 className="text-5xl md:text-6xl font-black tracking-tighter leading-tight uppercase">
                     Command <br />
-                    <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-black to-gray-400' : 'from-cyan-400 to-blue-600'}`}>Center</span>
+                    <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-black to-gray-400' : 'from-accent-primary to-accent-secondary'}`}>Center</span>
                 </h1>
                 <p className={`text-lg max-w-lg font-light leading-relaxed ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
                     Welcome back, Operator <strong className={isLight ? 'text-black' : 'text-white'}>{currentUser.username}</strong>. Monitoring live combat vectors.
                 </p>
-                {isLoading && <div className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse text-cyan-500">Syncing with global intel...</div>}
+                {isLoading && <div className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse text-accent-secondary">Syncing with global intel...</div>}
                 {error && <div className="text-xs font-black uppercase text-red-500">{error}</div>}
             </div>
             <div className="flex flex-wrap gap-4">
@@ -243,7 +239,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                 ].map((s, i) => (
                     <div key={i} className={`p-6 rounded-3xl border backdrop-blur-xl relative overflow-hidden group transition-all hover:-translate-y-1 ${isLight ? 'bg-white border-black/5 shadow-xl' : 'bg-white/5 border-white/10 hover:bg-white/8'}`}>
                         <div className={`p-3 rounded-2xl w-fit mb-4 ${isLight ? 'bg-black/5' : 'bg-white/10'}`}>{s.icon}</div>
-                        <p className="text-3xl font-black italic tracking-tighter">{s.val}</p>
+                        <p className="text-3xl font-black tracking-tighter">{s.val}</p>
                         <p className="text-[10px] font-black uppercase tracking-widest mt-1 opacity-50">{s.label}</p>
                     </div>
                 ))}
@@ -266,7 +262,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                         className={`group p-8 rounded-3xl border transition-all duration-300 text-left relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10 hover:bg-black/10' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
                         <div className={`absolute top-6 right-6 text-[10px] font-black tracking-widest border px-2 py-0.5 rounded ${isLight ? 'border-black/20 text-gray-600' : 'border-white/20 text-gray-400'}`}>{mode.badge}</div>
                         <div className={`mb-6 transition-colors ${isLight ? 'text-gray-600 group-hover:text-black' : 'text-gray-300 group-hover:text-white'}`}>{mode.icon}</div>
-                        <h3 className="text-2xl font-black mb-3 italic uppercase tracking-tighter">{mode.title}</h3>
+                        <h3 className="text-2xl font-black mb-3 uppercase tracking-tighter">{mode.title}</h3>
                         <p className={`text-sm leading-relaxed mb-6 font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>{mode.desc}</p>
                         <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all group-hover:gap-4 ${isLight ? 'text-gray-500 group-hover:text-black' : 'text-gray-400 group-hover:text-white'}`}>
                             Deploy <ChevronRight size={14} />
@@ -285,7 +281,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                 <div className="flex flex-col xl:flex-row gap-12">
                     <div className="flex-1 space-y-10">
                         <div className="space-y-2">
-                            <h2 className="text-4xl font-black tracking-tighter uppercase italic">Practice Lab</h2>
+                            <h2 className="text-4xl font-black tracking-tighter uppercase">Practice Lab</h2>
                             <p className={`text-lg font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Adaptive training engine — optimized for skill vector evolution.</p>
                         </div>
 
@@ -329,7 +325,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 </div>
                                 <div className="space-y-6">
                                     <div className="space-y-1">
-                                        <div className="text-3xl font-black italic uppercase tracking-tighter">Recommended</div>
+                                        <div className="text-3xl font-black uppercase tracking-tighter">Recommended</div>
                                         <p className="text-[10px] uppercase font-black opacity-60 flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Graphs (Weak Area)
                                         </p>
@@ -356,7 +352,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             <div className="panel-content">
                 <h2 className="text-4xl font-bold tracking-tighter uppercase">Battle Log</h2>
                 <div className={`mt-8 p-8 rounded-3xl border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                    <p className="opacity-50 font-mono italic">Protocol Data: 0 matches found in local cache.</p>
+                    <p className="opacity-50 font-mono">Protocol Data: 0 matches found in local cache.</p>
                 </div>
             </div>
         ),
@@ -370,7 +366,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 <span className="font-black opacity-20 text-2xl w-8">#{i + 1}</span>
                                 <span className="font-bold">{u.username}</span>
                             </div>
-                            <span className="font-black text-cyan-500">{u.rating} RP</span>
+                            <span className="font-black text-accent-secondary">{u.rating} RP</span>
                         </div>
                     ))}
                 </div>
@@ -380,7 +376,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             <div className="panel-content space-y-10">
                 <div className="flex justify-between items-end">
                     <div>
-                        <h2 className="text-4xl font-black tracking-tighter uppercase italic">Operator DNA</h2>
+                        <h2 className="text-4xl font-black tracking-tighter uppercase">Operator DNA</h2>
                         <p className={`text-lg font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Protocol Clearance: Level 42 — Master Architect</p>
                     </div>
                     <button
@@ -396,7 +392,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                     <div className="lg:col-span-4 space-y-8">
                         <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden ${isLight ? 'bg-black text-white shadow-2xl' : 'bg-white text-black shadow-white/5 shadow-2xl skew-y-1'}`}>
                             <div className="relative group cursor-pointer mb-8">
-                                <div className={`w-32 h-32 rounded-[2.5rem] bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center font-black text-5xl transition-transform group-hover:scale-105 duration-500`}>
+                                <div className={`w-32 h-32 rounded-[2.5rem] bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center font-black text-5xl transition-transform group-hover:scale-105 duration-500`}>
                                     {currentUser.username?.[0].toUpperCase()}
                                 </div>
                                 {isEditingProfile && (
@@ -406,7 +402,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 )}
                             </div>
                             <div className="text-center space-y-2">
-                                <h3 className="text-3xl font-black italic tracking-tighter uppercase">{currentUser.username}</h3>
+                                <h3 className="text-3xl font-black tracking-tighter uppercase">{currentUser.username}</h3>
                                 <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-40">Active Instance // US-EAST-1</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4 w-full mt-10">
@@ -448,7 +444,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                             <div className="flex flex-wrap gap-4">
                                 {[
                                     { icon: <Zap size={20} />, label: 'Blitz Master', color: 'bg-yellow-500/20 text-yellow-500' },
-                                    { icon: <Award size={20} />, label: 'Algorithm Elite', color: 'bg-cyan-500/20 text-cyan-500' },
+                                    { icon: <Award size={20} />, label: 'Algorithm Elite', color: 'bg-accent-secondary/15 text-accent-secondary' },
                                     { icon: <Shield size={20} />, label: 'Bug Crusher', color: 'bg-green-500/20 text-green-500' },
                                     { icon: <TrendingUp size={20} />, label: 'Top 1% Growth', color: 'bg-purple-500/20 text-purple-500' },
                                     { icon: <Trophy size={20} />, label: 'Season III Champ', color: 'bg-blue-500/20 text-blue-500' },
@@ -469,11 +465,11 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                         <div id="logs" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
                             <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 flex justify-between">
                                 <span>Recent combat logs</span>
-                                <span className="opacity-40 italic">Uplink Stable</span>
+                                <span className="opacity-40">Uplink Stable</span>
                             </h4>
                             <div className="space-y-4">
                                 {recentMatchesData.length === 0 && !isLoading && (
-                                    <p className="text-xs opacity-40 italic">No recent combat logs found in this sector.</p>
+                                    <p className="text-xs opacity-40">No recent combat logs found in this sector.</p>
                                 )}
                                 {recentMatchesData.map((log) => (
                                     <div key={log.id} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all hover:bg-white/5 border border-transparent hover:border-white/10`}>
@@ -483,7 +479,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-lg font-black italic uppercase tracking-tighter">Match #{log.id.slice(0, 8)}</span>
+                                                    <span className="text-lg font-black uppercase tracking-tighter">Match #{log.id.slice(0, 8)}</span>
                                                     <span className="text-[8px] font-black px-1.5 py-0.5 bg-white/10 rounded uppercase opacity-50 tracking-widest">{log.status}</span>
                                                 </div>
                                                 <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mt-1">Status: {log.status} // {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'Active'}</p>
@@ -508,17 +504,17 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                     <div className="space-y-1.5">
                                         <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator ID</label>
                                         {isEditingProfile ? (
-                                            <input type="text" defaultValue={currentUser.username} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
+                                            <input type="text" defaultValue={currentUser.username} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black focus:border-accent-secondary outline-none" />
                                         ) : (
-                                            <p className="text-lg font-black italic tracking-tighter">{currentUser.username || 'GUEST_OPERATOR'}</p>
+                                            <p className="text-lg font-black tracking-tighter">{currentUser.username || 'GUEST_OPERATOR'}</p>
                                         )}
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Uplink Email</label>
                                         {isEditingProfile ? (
-                                            <input type="email" defaultValue={currentUser.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none" />
+                                            <input type="email" defaultValue={currentUser.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black focus:border-accent-secondary outline-none" />
                                         ) : (
-                                            <p className="text-lg font-black italic tracking-tighter truncate">{currentUser.email || 'N/A'}</p>
+                                            <p className="text-lg font-black tracking-tighter truncate">{currentUser.email || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -526,9 +522,9 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                     <div className="space-y-1.5">
                                         <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator Bio // System Motto</label>
                                         {isEditingProfile ? (
-                                            <textarea rows={3} className="w-full bg-white/5 border border-white/20 rounded-2xl p-4 text-xs font-black italic focus:border-cyan-500 outline-none resize-none" defaultValue="Evolved logic. Absolute precision. The void awaits." />
+                                            <textarea rows={3} className="w-full bg-white/5 border border-white/20 rounded-2xl p-4 text-xs font-black focus:border-accent-secondary outline-none resize-none" defaultValue="Evolved logic. Absolute precision. The void awaits." />
                                         ) : (
-                                            <p className="text-xs font-light tracking-wide leading-relaxed italic opacity-80">"Evolved logic. Absolute precision. The void awaits."</p>
+                                            <p className="text-xs font-light tracking-wide leading-relaxed opacity-80">"Evolved logic. Absolute precision. The void awaits."</p>
                                         )}
                                     </div>
                                 </div>
@@ -550,7 +546,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                             <div className="flex justify-between items-center">
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-2">{s.label}</p>
-                                    <p className="text-2xl font-black italic">{s.val}</p>
+                                    <p className="text-2xl font-black">{s.val}</p>
                                 </div>
                                 {s.icon}
                             </div>
@@ -575,17 +571,17 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 {isMenuOpen ? <X size={22} className="group-hover:rotate-90 transition-transform" /> : <Menu size={22} className="group-hover:scale-110 transition-transform" />}
                             </button>
                             <div className="dash-element hidden sm:block min-w-0 flex-shrink">
-                                <span className={`text-[10px] font-black uppercase tracking-[0.4em] block mb-1.5 transition-colors opacity-40 ${isLight ? 'text-gray-400' : 'text-cyan-500'}`}>Uplink // Status: Nominal</span>
-                                <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tighter italic leading-none truncate">
-                                    {activeTab} <span className="text-gray-500 tracking-normal opacity-40 italic">Sector</span>
+                                <span className={`text-[10px] font-black uppercase tracking-[0.4em] block mb-1.5 transition-colors opacity-40 ${isLight ? 'text-gray-400' : 'text-accent-secondary'}`}>Uplink // Status: Nominal</span>
+                                <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none truncate">
+                                    {activeTab} <span className="text-gray-500 tracking-normal opacity-40">Sector</span>
                                 </h1>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-4 dash-element flex-shrink-0">
                             <div className="relative group hidden lg:block">
-                                <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-500 ${isLight ? 'bg-white border-black/10 focus-within:border-black' : 'bg-white/5 border-white/10 focus-within:border-cyan-500/40 text-white'}`}>
-                                    <Search size={16} className={`transition-opacity ${searchQuery ? 'opacity-100 text-cyan-500' : 'opacity-30'}`} />
+                                <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-500 ${isLight ? 'bg-white border-black/10 focus-within:border-black' : 'bg-white/5 border-white/10 focus-within:border-accent-secondary/40 text-white'}`}>
+                                    <Search size={16} className={`transition-opacity ${searchQuery ? 'opacity-100 text-accent-secondary' : 'opacity-30'}`} />
                                     <input
                                         type="text" placeholder="Search protocol data..." value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -619,7 +615,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 {showNots && (
                                     <div className={`absolute top-16 right-0 w-80 rounded-3xl p-6 shadow-3xl z-50 border animate-in zoom-in-95 duration-200 ${isLight ? 'bg-white border-black/10 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl shadow-black/50'}`}>
                                         <div className="flex items-center justify-between mb-6">
-                                            <h3 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-cyan-500'}`}>Intelligence Feed</h3>
+                                            <h3 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-accent-secondary'}`}>Intelligence Feed</h3>
                                         </div>
                                         <div className="space-y-3">
                                             {notifications.map(n => (
@@ -636,18 +632,18 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                             <div className="relative" ref={mailRef}>
                                 <button onClick={() => { setShowMail(!showMail); setShowNots(false); }} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
                                     <Mail size={20} />
-                                    <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-cyan-500 border-2 border-black rounded-full animate-pulse" />
+                                    <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-accent-secondary border-2 border-black rounded-full animate-pulse" />
                                 </button>
                                 {showMail && (
                                     <div className={`absolute top-16 right-0 w-80 rounded-3xl p-6 shadow-3xl z-50 border animate-in zoom-in-95 duration-200 ${isLight ? 'bg-white border-black/10 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl shadow-black/50'}`}>
                                         <div className="flex items-center justify-between mb-6">
-                                            <h3 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-cyan-500'}`}>Secure Uplink</h3>
+                                            <h3 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-accent-secondary'}`}>Secure Uplink</h3>
                                         </div>
                                         <div className="space-y-1.5">
                                             {messages.map(m => (
                                                 <div key={m.id} className={`p-4 rounded-2xl ${m.unread ? (isLight ? 'bg-black/5' : 'bg-white/10') : 'hover:bg-white/5'}`}>
                                                     <div className="flex justify-between items-start mb-1">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-cyan-500">{m.from}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-secondary">{m.from}</span>
                                                         <span className="text-[8px] opacity-30">{m.time}</span>
                                                     </div>
                                                     <p className="text-xs font-medium opacity-80 line-clamp-1">{m.text}</p>
@@ -670,7 +666,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                             <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Active</span>
                                         </div>
                                     </div>
-                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-black font-black text-sm`}>
+                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center text-black font-black text-sm`}>
                                         {(currentUser.username || 'G')[0].toUpperCase()}
                                     </div>
                                 </button>

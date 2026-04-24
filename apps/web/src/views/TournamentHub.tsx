@@ -138,7 +138,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
             {/* Header section */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
                 <div className="space-y-2">
-                    <h1 className="text-5xl font-black tracking-tighter uppercase italic">
+                    <h1 className="text-5xl font-black tracking-tighter uppercase">
                         Tournament <br />
                         <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-black to-gray-400' : 'from-white to-gray-500'}`}>Hub</span>
                     </h1>
@@ -174,7 +174,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
                         <div className="relative z-10">
                             <div className="flex justify-between items-start mb-6">
                                 <div className={`flex items-center gap-2 px-3 py-1 rounded-full border border-current text-[10px] font-black uppercase tracking-widest ${t.tier === 'Diamond' ? 'text-blue-400' :
-                                    t.tier === 'Platinum' ? 'text-cyan-400' :
+                                    t.tier === 'Platinum' ? 'text-accent-secondary' :
                                         t.tier === 'Gold' ? 'text-yellow-500' : 'text-gray-400'
                                     }`}>
                                     <Trophy size={10} /> {t.tier} Tier
@@ -200,7 +200,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
                                 </div>
                                 <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                                     <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-1 flex items-center gap-1.5"><Zap size={12} /> Prize Pool</p>
-                                    <p className="text-xl font-black text-cyan-400">{t.prizePool}</p>
+                                    <p className="text-xl font-black text-accent-secondary">{t.prizePool}</p>
                                 </div>
                             </div>
                         </div>
@@ -221,7 +221,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
                                 </button>
                             ) : t.status === 'live' ? (
                                 <div className="flex gap-2">
-                                    <button className="px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest bg-cyan-500 text-white hover:scale-105 shadow-lg shadow-cyan-500/20">
+                                    <button className="px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest bg-accent-secondary text-white hover:scale-105 shadow-lg shadow-accent-secondary/20">
                                         Watch
                                     </button>
                                     <button className={`px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest border transition-all ${isLight ? 'border-black/10 hover:bg-black/5' : 'border-white/10 hover:bg-white/5'
@@ -239,7 +239,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
 
                         {/* Background Decorative Element */}
                         <div className={`absolute -bottom-10 -right-10 w-48 h-48 rounded-full blur-[80px] opacity-10 transition-opacity group-hover:opacity-20 ${t.tier === 'Diamond' ? 'bg-blue-400' :
-                            t.tier === 'Platinum' ? 'bg-cyan-400' :
+                            t.tier === 'Platinum' ? 'bg-accent-secondary' :
                                 t.tier === 'Gold' ? 'bg-yellow-500' : 'bg-gray-400'
                             }`} />
                     </div>
@@ -253,7 +253,7 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
                         <Gavel size={32} />
                     </div>
                     <div>
-                        <h4 className="text-2xl font-black uppercase tracking-tighter italic">Official Protocol</h4>
+                        <h4 className="text-2xl font-black uppercase tracking-tighter">Official Protocol</h4>
                         <p className="text-xs opacity-60 uppercase tracking-widest mt-1">Tournament Rules & Eligibility</p>
                     </div>
                 </div>

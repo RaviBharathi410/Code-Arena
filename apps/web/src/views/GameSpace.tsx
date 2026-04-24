@@ -434,7 +434,7 @@ export const GameSpace: React.FC = () => {
                     </button>
                     <div className="flex items-center gap-2">
                         {isPractice ? <Shield size={18} className="text-blue-500" /> : <Activity size={18} className="text-green-500" />}
-                        <span className="text-sm font-black tracking-widest uppercase italic">
+                        <span className="text-sm font-black tracking-widest uppercase">
                             {isPractice ? 'Practice_Lab' : 'Ranked_Dual'}
                         </span>
                     </div>
@@ -478,7 +478,7 @@ export const GameSpace: React.FC = () => {
                                     <button
                                         onClick={isListening ? stopListening : startListening}
                                         className={`p-2 rounded-lg border transition-all ${isListening
-                                            ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                            ? 'bg-accent-secondary/15 border-accent-secondary/40 text-accent-secondary'
                                             : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                                             }`}
                                     >
@@ -486,7 +486,7 @@ export const GameSpace: React.FC = () => {
                                     </button>
                                 </div>
                                 {voiceFeedback && (
-                                    <span className="text-[10px] font-mono text-cyan-400/70 animate-pulse mt-1 max-w-[150px] truncate">
+                                    <span className="text-[10px] font-mono text-accent-secondary/70 animate-pulse mt-1 max-w-[150px] truncate">
                                         {voiceFeedback}
                                     </span>
                                 )}
@@ -494,7 +494,7 @@ export const GameSpace: React.FC = () => {
                             <button
                                 onClick={handleSubmit}
                                 disabled={isSubmitting || isComplete}
-                                className="px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-black font-black uppercase tracking-widest text-xs rounded-lg transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                                className="px-6 py-2.5 bg-accent-secondary hover:bg-accent-secondary/90 disabled:bg-gray-700 text-white font-black uppercase tracking-widest text-xs rounded-lg transition-all flex items-center gap-2 shadow-[0_0_22px_rgba(124,58,237,0.22)]"
                             >
                                 <Zap size={14} />
                                 {isSubmitting ? 'Transmitting...' : 'Execute Uplink'}
@@ -512,7 +512,7 @@ export const GameSpace: React.FC = () => {
                 >
                     <div className="p-8 overflow-y-auto flex-1 custom-scrollbar min-w-[450px]">
                         <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-3xl font-black tracking-tighter uppercase italic">{selectedProblem.title}</h2>
+                            <h2 className="text-3xl font-black tracking-tighter uppercase">{selectedProblem.title}</h2>
                             <button onClick={() => setShowProblem(false)} className="p-2 text-gray-500 hover:text-white">
                                 <X size={20} />
                             </button>
@@ -617,7 +617,7 @@ export const GameSpace: React.FC = () => {
                             </div>
                             <div className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1">
                                 <p className="text-[8px] font-black text-gray-600 uppercase">Strategy</p>
-                                <p className="text-sm font-bold text-cyan-400">{liveStrategy}</p>
+                                <p className="text-sm font-bold text-accent-secondary">{liveStrategy}</p>
                             </div>
                         </div>
 
@@ -627,7 +627,7 @@ export const GameSpace: React.FC = () => {
                                 <span className="text-white">{confidence}%</span>
                             </div>
                             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-1000" style={{ width: `${confidence}%` }} />
+                                <div className="h-full bg-gradient-to-r from-accent-primary to-accent-secondary transition-all duration-1000" style={{ width: `${confidence}%` }} />
                             </div>
                         </div>
                     </div>
@@ -685,10 +685,10 @@ export const GameSpace: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in fade-in duration-700">
                     <div className="w-full max-w-5xl bg-[#080808] border border-white/10 rounded-[3.5rem] overflow-hidden shadow-[0_0_120px_rgba(0,0,0,0.5)] flex flex-col lg:flex-row h-[85vh]">
                         {/* Summary Panel */}
-                        <div className={`w-full lg:w-96 p-12 flex flex-col justify-between relative overflow-hidden ${score.result === 'VICTORY' ? 'bg-cyan-500' : 'bg-red-500'}`}>
+                        <div className={`w-full lg:w-96 p-12 flex flex-col justify-between relative overflow-hidden ${score.result === 'VICTORY' ? 'bg-accent-secondary' : 'bg-red-500'}`}>
                             <div className="relative z-10 space-y-3">
                                 <p className="text-black text-[10px] font-black uppercase tracking-[0.4em]">Protocol Status</p>
-                                <h2 className="text-7xl font-black text-black leading-none italic tracking-tighter">{score.result}</h2>
+                                <h2 className="text-7xl font-black text-black leading-none tracking-tighter">{score.result}</h2>
                             </div>
 
                             <div className="relative z-10">
@@ -708,7 +708,7 @@ export const GameSpace: React.FC = () => {
                         <div className="flex-1 p-16 overflow-y-auto custom-scrollbar space-y-16">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h3 className="text-3xl font-black tracking-tight uppercase italic">Match Analytics</h3>
+                                    <h3 className="text-3xl font-black tracking-tight uppercase">Match Analytics</h3>
                                     <p className="text-gray-500 text-[10px] font-mono mt-2 tracking-widest uppercase opacity-40">Session ID: {Math.random().toString(36).substr(2, 12).toUpperCase()}</p>
                                 </div>
                                 <button onClick={() => goToDashboard()} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white hover:text-black transition-all group">
@@ -724,7 +724,7 @@ export const GameSpace: React.FC = () => {
                                     { icon: <Layers size={18} />, label: 'Input Load', val: score.inputSize, sub: 'High Stress' },
                                 ].map((m, i) => (
                                     <div key={i} className="p-8 rounded-[2rem] bg-white/2 border border-white/5 space-y-4 hover:border-white/20 transition-all group">
-                                        <div className="text-gray-600 group-hover:text-cyan-400 transition-colors">{m.icon}</div>
+                                        <div className="text-gray-600 group-hover:text-accent-secondary transition-colors">{m.icon}</div>
                                         <div>
                                             <p className="text-3xl font-black text-white">{m.val}</p>
                                             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-1">{m.label}</p>
@@ -739,7 +739,7 @@ export const GameSpace: React.FC = () => {
                                 </h4>
                                 <div className="flex gap-2 h-32 items-end bg-black/40 p-6 rounded-[2rem] border border-white/5">
                                     {score.heatmap.map((v: number, i: number) => (
-                                        <div key={i} className="flex-1 bg-cyan-500/20 rounded-md hover:bg-cyan-500 transition-all duration-500" style={{ height: v + '%' }} />
+                                        <div key={i} className="flex-1 bg-accent-secondary/15 rounded-md hover:bg-accent-secondary transition-all duration-500" style={{ height: v + '%' }} />
                                     ))}
                                 </div>
                             </div>
@@ -762,7 +762,7 @@ export const GameSpace: React.FC = () => {
                         <div className="flex items-center gap-4 text-red-500">
                             <Shield size={32} />
                             <div>
-                                <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Warning: Combat Active</h3>
+                                <h3 className="text-xl font-black uppercase tracking-tighter text-white">Warning: Combat Active</h3>
                                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Protocol Abandonment Imminent</p>
                             </div>
                         </div>

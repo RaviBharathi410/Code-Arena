@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_URL } from '../lib/api';
-import { useAuthStore } from '../store/useAuthStore';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -20,37 +19,33 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const connect = useCallback(() => {
         if (socketRef.current?.connected) return;
 
-        const token = useAuthStore.getState().token;
-        if (!token) return;
-
-        const socket = io(SOCKET_URL, {
-            auth: { token },
-            reconnection: true,
+        socketRef.current = io(SOCKET_URL, {
+            withCredentials: true,
+            path: '/socket.io'
         });
 
-        socket.on('connect', () => {
-            console.log('Socket connected:', socket.id);
+        socketRef.current.on('connect', () => {
             setConnected(true);
         });
 
-        socket.on('disconnect', () => {
-            console.log('Socket disconnected');
+        socketRef.current.on('disconnect', () => {
             setConnected(false);
         });
-
-        socketRef.current = socket;
     }, []);
 
     const emit = useCallback((event: string, data?: any) => {
-        if (socketRef.current?.connected) {
-            socketRef.current.emit(event, data);
-        } else {
-            console.warn(`Socket not connected. Cannot emit: ${event}`);
-        }
+        socketRef.current?.emit(event, data);
     }, []);
 
     const on = useCallback((event: string, callback: (...args: any[]) => void) => {
-        socketRef.current?.on(event, callback);
+        // Queue the event registration if socket is not ready, or just attach it.
+        // It's safer to attach it when the component renders.
+        // If socketRef isn't initialized yet, this might attach late if we aren't careful.
+        // For simplicity now, we assume connect() is called early.
+        if (socketRef.current) {
+            socketRef.current.on(event, callback);
+        }
+        
         return () => {
             socketRef.current?.off(event, callback);
         };
