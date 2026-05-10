@@ -27,7 +27,7 @@ export class AuthController {
             if (err.message === 'User already exists') {
                 return res.status(409).json({ message: 'User already exists' });
             }
-            console.error('Registration Error:', err);
+            logger.error({ err }, 'Registration Error');
             res.status(500).json({ message: 'Error registering user' });
         }
     }
@@ -58,7 +58,7 @@ export class AuthController {
             if (err.message === 'Invalid credentials') {
                 return res.status(401).json({ message: 'Invalid credentials' });
             }
-            console.error('Login Error:', err);
+            logger.error({ err }, 'Login Error');
             res.status(500).json({ message: 'Error logging in' });
         }
     }
@@ -106,7 +106,7 @@ export class AuthController {
             const profile = await authService.updateProfile(req.user.id, req.body);
             res.json(profile);
         } catch (err: any) {
-            console.error('Update Profile Error:', err);
+            logger.error({ err }, 'Update Profile Error');
             res.status(err.message === 'User not found' ? 404 : 500).json({ message: err.message });
         }
     }

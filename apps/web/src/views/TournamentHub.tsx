@@ -136,18 +136,20 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
             )}
 
             {/* Header section */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
-                <div className="space-y-2">
-                    <h1 className="text-5xl font-black tracking-tighter uppercase">
-                        Tournament <br />
-                        <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-black to-gray-400' : 'from-white to-gray-500'}`}>Hub</span>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10 pt-4">
+                <div className="space-y-3 flex-1">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-accent-secondary/30 bg-accent-secondary/5 text-accent-secondary text-[10px] font-black uppercase tracking-widest">
+                        <Gavel size={14} /> Global Tournament Protocol
+                    </div>
+                    <h1 className="text-6xl md:text-7xl font-black tracking-tighter uppercase leading-[0.9]">
+                        Tournament <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary to-accent-secondary">Hub</span>
                     </h1>
-                    <p className={`text-lg font-light ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
-                        Meta-level arena operations. Global bracket synchronization active.
+                    <p className={`text-sm font-medium max-w-2xl ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Meta-level arena operations. Global bracket synchronization active. Identify and engage in active combat sequences.
                     </p>
                 </div>
 
-                <div className={`p-1.5 rounded-2xl flex gap-1 ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                <div className={`p-1.5 rounded-2xl flex gap-1 self-start md:self-center ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                     {(['Upcoming', 'Live', 'Completed'] as const).map(tab => (
                         <button
                             key={tab}
@@ -171,36 +173,37 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
                         className={`tournament-card group p-8 rounded-[2.5rem] border transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${isLight ? 'bg-white border-black/5 hover:border-black/10 hover:shadow-2xl' : 'bg-white/5 border-white/8 hover:border-white/20 hover:bg-white/[0.07]'
                             }`}
                     >
-                        <div className="relative z-10">
-                            <div className="flex justify-between items-start mb-6">
-                                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border border-current text-[10px] font-black uppercase tracking-widest ${t.tier === 'Diamond' ? 'text-blue-400' :
-                                    t.tier === 'Platinum' ? 'text-accent-secondary' :
-                                        t.tier === 'Gold' ? 'text-yellow-500' : 'text-gray-400'
-                                    }`}>
-                                    <Trophy size={10} /> {t.tier} Tier
-                                </div>
-                                {t.status === 'live' && (
-                                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse border border-red-500/20">
-                                        <Activity size={10} /> Live Now
-                                    </div>
-                                )}
+                    <div className="relative z-10">
+                        <div className="flex flex-wrap items-center gap-3 mb-6">
+                            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border border-current text-[10px] font-black uppercase tracking-widest ${t.tier === 'Diamond' ? 'text-blue-400' :
+                                t.tier === 'Platinum' ? 'text-accent-secondary' :
+                                    t.tier === 'Gold' ? 'text-yellow-500' : 'text-gray-400'
+                                }`}>
+                                <Trophy size={10} /> {t.tier} Tier
                             </div>
+                            {t.status === 'live' && (
+                                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse border border-red-500/20">
+                                    <Activity size={10} /> Live Now
+                                </div>
+                            )}
+                        </div>
 
-                            <h3 className="text-3xl font-black mb-2 uppercase tracking-tighter leading-none group-hover:scale-[1.02] transition-transform origin-left">
+                            <h3 className={`text-3xl font-black mb-3 uppercase tracking-tighter leading-none group-hover:scale-[1.02] transition-transform origin-left text-left ${isLight ? 'text-black' : 'text-white'}`}>
                                 {t.name}
                             </h3>
-                            <p className={`text-sm font-medium mb-8 ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
-                                {t.format} • {t.requirements}
-                            </p>
+                            <div className="flex items-center gap-3 mb-8">
+                                <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${isLight ? 'bg-black/5 text-gray-500' : 'bg-white/5 text-gray-400'}`}>{t.format}</span>
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{t.requirements}</span>
+                            </div>
 
                             <div className="grid grid-cols-2 gap-4 mb-8">
-                                <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-1 flex items-center gap-1.5"><Users size={12} /> Players</p>
-                                    <p className="text-xl font-black">{t.players} / {t.maxPlayers}</p>
+                                <div className={`p-5 rounded-3xl border ${isLight ? 'bg-white border-black/5' : 'bg-black/20 border-white/5'}`}>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2 flex items-center gap-1.5"><Users size={12} /> Players</p>
+                                    <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'}`}>{t.players} / <span className="opacity-40">{t.maxPlayers}</span></p>
                                 </div>
-                                <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-1 flex items-center gap-1.5"><Zap size={12} /> Prize Pool</p>
-                                    <p className="text-xl font-black text-accent-secondary">{t.prizePool}</p>
+                                <div className={`p-5 rounded-3xl border ${isLight ? 'bg-white border-black/5' : 'bg-black/20 border-white/5'}`}>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2 flex items-center gap-1.5"><Zap size={12} /> Prize Pool</p>
+                                    <p className="text-2xl font-black text-accent-secondary">{t.prizePool}</p>
                                 </div>
                             </div>
                         </div>

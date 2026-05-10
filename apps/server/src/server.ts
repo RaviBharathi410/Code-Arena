@@ -6,6 +6,7 @@ import { setupSocket } from './socket';
 import { config } from './config';
 import { env } from './config/env';
 import { logger } from './lib/logger';
+import { setCodeQueueIO, setEloQueueIO, codeExecutionWorker, eloWorker, analyticsWorker } from './queues';
 
 const startServer = () => {
     const app = createApp();
@@ -17,9 +18,16 @@ const startServer = () => {
             credentials: true,
             methods: ['GET', 'POST'],
         },
+        maxHttpBufferSize: 5e4, // 50 KB max payload size to prevent DoS
     });
 
     setupSocket(io);
+
+    // ── BullMQ: Wire Socket.IO into queue workers ─────────────────────────
+    // This lets workers emit real-time events after processing jobs.
+    setCodeQueueIO(io);
+    setEloQueueIO(io);
+    logger.info('[ARENA] BullMQ workers wired with Socket.IO');
 
     httpServer.listen(config.port, '0.0.0.0', () => {
         logger.info(`[ARENA] Intelligence Uplink established on port ${config.port}`);
@@ -40,8 +48,17 @@ const startServer = () => {
     });
 
     // Graceful SIGTERM shutdown (e.g. from Docker / PM2)
-    process.on('SIGTERM', () => {
+    process.on('SIGTERM', async () => {
         logger.info('[ARENA] SIGTERM received. Closing uplink gracefully...');
+
+        // Close BullMQ workers first (let in-flight jobs finish)
+        await Promise.allSettled([
+            codeExecutionWorker.close(),
+            eloWorker.close(),
+            analyticsWorker.close(),
+        ]);
+        logger.info('[ARENA] BullMQ workers closed.');
+
         httpServer.close(() => {
             logger.info('[ARENA] HTTP server closed.');
             process.exit(0);

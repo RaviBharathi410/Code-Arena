@@ -9,6 +9,7 @@ import { Dashboard } from '../views/Dashboard';
 import { GameSpace } from '../views/GameSpace';
 import { BattleArena } from '../views/BattleArena';
 import { OpponentSelection } from '../views/OpponentSelection';
+import { ProblemsList } from '../views/ProblemsList';
 import type { PageId } from './navigationState';
 
 // ── Page Map ──────────────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ const PAGE_MAP: Record<PageId, React.FC<any>> = {
     [PAGES.ARENA_SOLO]: GameSpace,
     [PAGES.ARENA_PRACTICE]: GameSpace,
     [PAGES.ARENA_MATCH]: BattleArena,
+    [PAGES.PROBLEMS]: ProblemsList,
 };
 
 // Pages that don't require authentication

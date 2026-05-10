@@ -33,11 +33,10 @@ export class ProblemsService {
             .from(problems)
             .where(whereClause)
             .limit(limit)
-            .offset(offset)
-            .all();
+            .offset(offset);
 
         return {
-            total: totalCount.value,
+            total: Number(totalCount?.value || 0),
             limit,
             offset,
             data
@@ -45,7 +44,7 @@ export class ProblemsService {
     }
 
     async getProblemById(id: string) {
-        const problem = await db.select({
+        const [problem] = await db.select({
             id: problems.id,
             title: problems.title,
             difficulty: problems.difficulty,
@@ -54,10 +53,11 @@ export class ProblemsService {
             constraints: problems.constraints,
             baseCode: problems.baseCode,
             createdAt: problems.createdAt,
+            testCases: problems.testCases,
         })
             .from(problems)
             .where(eq(problems.id, id))
-            .get();
+            .limit(1);
 
         if (!problem) {
             throw new Error('Problem not found');
@@ -70,15 +70,24 @@ export class ProblemsService {
             ? eq(problems.difficulty, difficulty as any)
             : undefined;
 
-        const allIds = await db.select({ id: problems.id })
+        // Optimized: Use ORDER BY RANDOM() for PostgreSQL
+        const [problem] = await db.select({
+            id: problems.id,
+            title: problems.title,
+            difficulty: problems.difficulty,
+            description: problems.description,
+            examples: problems.examples,
+            constraints: problems.constraints,
+            baseCode: problems.baseCode,
+            createdAt: problems.createdAt,
+        })
             .from(problems)
             .where(whereClause)
-            .all();
+            .orderBy(sql`RANDOM()`)
+            .limit(1);
 
-        if (allIds.length === 0) throw new Error('No problems found');
-
-        const randomId = allIds[Math.floor(Math.random() * allIds.length)].id;
-        return this.getProblemById(randomId);
+        if (!problem) throw new Error('No problems found');
+        return problem;
     }
 }
 

@@ -9,7 +9,7 @@ const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().default(3001),
     DATABASE_URL: z.string().min(1),
-    REDIS_URL: z.string().url().optional(), // Making optional if not used yet
+    REDIS_URL: z.string().default('redis://localhost:6379'), // Required for BullMQ + Socket.IO adapter
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     JWT_EXPIRES_IN: z.string().default('15m'),
     JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),

@@ -1,27 +1,87 @@
 import rateLimit from 'express-rate-limit';
-import { env } from '../config/env';
+import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
+import { redis, isRedisReady } from '../lib/redis';
+import { logger } from '../lib/logger';
+import { monitor } from '../lib/monitor';
+import type { Request, Response, NextFunction } from 'express';
 
-// Redis integration is optional — falls back to in-memory for local dev.
-// In production, wire up a RedisStore here for distributed rate limiting.
-// The reason we do NOT init Redis here at module load is to avoid crashing
-// the server on startup when Redis is unavailable.
+// ── express-rate-limit: General API limiter ────────────────────────────────
+// Prevents abuse / scraping on all API endpoints.
 
-// Strict limit on auth endpoints — prevents brute-force attacks
-export const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,  // 15 minutes
-    max: 10,                    // 10 attempts per IP per window
-    standardHeaders: true,      // Return RateLimit-* headers
-    legacyHeaders: false,
-    handler: (req, res) => res.status(429).json({
-        message: 'Too many attempts. Try again in 15 minutes.'
-    }),
-    skipSuccessfulRequests: true,  // Only count failures against the limit
-});
-
-// General API limit — prevents abuse / scraping
 export const apiLimiter = rateLimit({
     windowMs: 60 * 1000,        // 1 minute
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
 });
+
+// ── express-rate-limit: Auth endpoint limiter ──────────────────────────────
+// Strict limit on auth endpoints — prevents brute-force attacks.
+
+export const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,  // 15 minutes
+    max: 100,                    // Increased for development
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        const ip = req.ip || req.socket.remoteAddress || 'unknown';
+        monitor.trackRateLimitStrike(ip, req.originalUrl);
+        res.status(429).json({
+            message: 'Too many attempts. Try again in 15 minutes.'
+        });
+    },
+    skipSuccessfulRequests: true,
+});
+
+/**
+ * Initialize rate limiter with fallback logic.
+ * Note: RateLimiterRedis is preferred for distributed state, 
+ * while RateLimiterMemory is used for single-instance resilience.
+ */
+let authRateLimiter: RateLimiterRedis | RateLimiterMemory;
+
+const initRateLimiter = () => {
+    if (isRedisReady()) {
+        authRateLimiter = new RateLimiterRedis({
+            storeClient: redis,
+            keyPrefix: 'rl:auth',
+            points: 100,
+            duration: 15 * 60,
+            blockDuration: 15 * 60,
+        });
+        logger.info('[RATE-LIMITER] Using Redis-backed sliding window for auth');
+    } else {
+        authRateLimiter = new RateLimiterMemory({
+            keyPrefix: 'rl:auth',
+            points: 100,
+            duration: 15 * 60,
+            blockDuration: 15 * 60,
+        });
+        logger.warn('[RATE-LIMITER] Redis offline — falling back to local memory rate limiting');
+    }
+};
+
+// Initial setup
+initRateLimiter();
+
+/**
+ * Middleware: IP-based sliding window rate limiter for auth endpoints.
+ * Uses rate-limiter-flexible for precise sliding window counters.
+ */
+export const authSlidingWindowLimiter = async (req: Request, res: Response, next: NextFunction) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+
+    try {
+        await authRateLimiter.consume(ip);
+        next();
+    } catch (rateLimiterRes: any) {
+        monitor.trackRateLimitStrike(ip, req.originalUrl);
+
+        const retryAfter = Math.ceil(rateLimiterRes.msBeforeNext / 1000) || 900;
+        res.set('Retry-After', String(retryAfter));
+        res.status(429).json({
+            message: 'Too many authentication attempts. Try again later.',
+            retryAfterSeconds: retryAfter,
+        });
+    }
+};

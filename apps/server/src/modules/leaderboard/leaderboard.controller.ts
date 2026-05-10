@@ -7,7 +7,7 @@ export class LeaderboardController {
             const limit = parseInt(req.query.limit as string) || 50;
             const offset = parseInt(req.query.offset as string) || 0;
             const rankings = await leaderboardService.getRankings(limit, offset);
-            res.json(rankings);
+            res.json({ data: rankings, total: rankings.length });
         } catch (err: any) {
             res.status(500).json({ message: 'Error fetching leaderboard' });
         }

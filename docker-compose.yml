@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # ── Judge0 Server ──────────────────────────────────────────────────────────
+  judge0-server:
+    image: judge0/judge0:1.13.0
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    privileged: true
+    restart: always
+
+  # ── Judge0 Workers ─────────────────────────────────────────────────────────
+  judge0-worker:
+    image: judge0/judge0:1.13.0
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    privileged: true
+    restart: always
+
+  # ── Redis (Used by Judge0 AND Arena Server) ─────────────────────────────────
+  redis:
+    image: redis:7.0-alpine
+    command: [
+      "bash", "-c",
+      'docker-entrypoint.sh --appendonly yes'
+    ]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: always
+
+  # ── PostgreSQL (Used by Judge0 AND Arena Server) ──────────────────────────
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_DB: voice_arena
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  redis-data:
+  pg-data:

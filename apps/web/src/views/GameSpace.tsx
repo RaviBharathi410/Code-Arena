@@ -26,6 +26,7 @@ import {
     Menu
 } from 'lucide-react';
 import { useLayout } from '../components/layout/MainLayout';
+import api from '../lib/api';
 
 // ── Types ────────────────────────────────────────────────────────────────
 import type { Problem as SharedProblem } from '../types';
@@ -96,7 +97,8 @@ export const GameSpace: React.FC = () => {
     const {
         joinMatch, updateCode: syncCode,
         problem: activeProblem, winner,
-        opponentCode: liveOpponentCode, submitCode: socketSubmit
+        opponentCode: liveOpponentCode, submitCode: socketSubmit,
+        verdict
     } = useMatch();
 
 
@@ -128,6 +130,15 @@ export const GameSpace: React.FC = () => {
     const [confidence, setConfidence] = useState<number>(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [showExitWarning, setShowExitWarning] = useState(false);
+    const [language, setLanguage] = useState('javascript');
+    const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+
+    const SUPPORTED_LANGUAGES = [
+        { id: 'javascript', name: 'JS', icon: 'JS' },
+        { id: 'python', name: 'PY', icon: 'PY' },
+        { id: 'java', name: 'JV', icon: 'JV' },
+        { id: 'cpp', name: 'C++', icon: 'C++' },
+    ];
 
     const timerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -142,6 +153,37 @@ export const GameSpace: React.FC = () => {
             joinMatch(matchId);
         }
     }, [navParams.matchId, connect, joinMatch]);
+
+    useEffect(() => {
+        const problemId = navParams.practiceType || navParams.problemId;
+        if (problemId) {
+            const fetchProblem = async () => {
+                try {
+                    setIsAnalyzing(true);
+                    const res = await api.get(`/problems/${problemId}`);
+                    const prob = res.data;
+                    if (prob) {
+                        const gameProb: GameProblem = {
+                            ...prob,
+                            timeLimit: 600,
+                            initialCode: prob.baseCode || 'function solution() {\n    // Write your code here\n}',
+                            constraints: prob.constraints || [],
+                            examples: prob.examples || [],
+                            testCases: prob.testCases || [],
+                        };
+                        setSelectedProblem(gameProb);
+                        setCode(gameProb.initialCode);
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch practice problem', err);
+                    // Fallback to local if possible or keep default
+                } finally {
+                    setIsAnalyzing(false);
+                }
+            };
+            fetchProblem();
+        }
+    }, [navParams.practiceType, navParams.problemId]);
 
     useEffect(() => {
         if (activeProblem) {
@@ -170,6 +212,14 @@ export const GameSpace: React.FC = () => {
     }, [isRunning, isComplete]);
 
     // Simulated WebRTC Signal Fluctuations
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (showLanguageDropdown) setShowLanguageDropdown(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showLanguageDropdown]);
+
     useEffect(() => {
         const interval = setInterval(() => {
             const r = Math.random();
@@ -237,6 +287,13 @@ export const GameSpace: React.FC = () => {
                 else if (hasBinarySearch) complexity = 'O(log N)';
                 else if (hasSorting) complexity = 'O(N log N)';
                 else if (nestedLoops === 1) complexity = 'O(N)';
+                else if (sourceCode.length > 50) complexity = 'O(1)'; // Base case
+                
+                // Refine complexity based on code structure
+                if (sourceCode.includes('.map(') || sourceCode.includes('.forEach(') || sourceCode.includes('.filter(')) {
+                    if (complexity === 'O(1)') complexity = 'O(N)';
+                    else if (complexity === 'O(N)') complexity = 'O(N²)';
+                }
 
                 // --- Strategy Detection (Step 2) ---
                 let strategy = 'Brute Force';
@@ -308,57 +365,47 @@ export const GameSpace: React.FC = () => {
         setSubmissionStatus('running');
 
         // Real submission via socket
-        socketSubmit(code, 'javascript');
+        socketSubmit(code, language);
 
         // Mark local as complete
         setIsComplete(true);
+    }, [isSubmitting, isComplete, socketSubmit, code, language]);
 
-        // Simulate test case execution locally for instant feedback
-        setTimeout(() => {
-            setSubmissionStatus('passed');
-
-            // Show real-time score impact preview before the final result modal
+    useEffect(() => {
+        if (verdict && isSubmitting) {
+            const isSuccess = verdict.status === 'accepted';
+            setSubmissionStatus(isSuccess ? 'passed' : 'failed');
             setShowScoreImpact(true);
 
-            // Wait a bit to show the modal
             setTimeout(() => {
                 setIsRunning(false);
                 const timeTaken = isPractice ? timeLeft : (selectedProblem.timeLimit - timeLeft);
-                const accuracy = Math.floor(Math.random() * 20) + 80; // 80-100%
                 const timeBonus = isPractice ? 0 : Math.max(0, Math.floor(timeLeft / 10));
 
-                // Detailed breakdown metrics
-                const efficiency = 92;
-                const complexity = 'O(N)';
-                const heatmap = Array.from({ length: 12 }, () => Math.floor(Math.random() * 100));
-
                 setScore({
-                    accuracy,
+                    accuracy: isSuccess ? 100 : 0,
                     timeBonus,
-                    rpGain: 32,
+                    rpGain: isSuccess ? 32 : -15,
                     expectedGain: 18,
-                    streakBonus: 14,
+                    streakBonus: isSuccess ? 14 : 0,
                     timeTaken,
-                    executionTime: Math.floor(Math.random() * 200) + 50, // ms
-                    memoryMB: 14.2,
+                    executionTime: verdict.runtime || 0,
+                    memoryMB: verdict.memory ? (verdict.memory / 1024).toFixed(2) : 0,
                     cpuCycles: '2.4M',
                     inputSize: '10^4 elements',
-                    percentileSpeed: 72,
-                    percentileMemory: 30,
-                    benchmarks: {
-                        top10Memory: 9.1,
-                        globalAvgMemory: 18.4
-                    },
-                    efficiency,
-                    complexity,
-                    heatmap,
-                    result: isPractice ? 'COMPLETED' : (accuracy > 85 ? 'VICTORY' : 'DEFEAT')
+                    percentileSpeed: isSuccess ? 72 : 0,
+                    percentileMemory: isSuccess ? 30 : 0,
+                    benchmarks: { top10Memory: 9.1, globalAvgMemory: 18.4 },
+                    efficiency: isSuccess ? 92 : 0,
+                    complexity: liveComplexity,
+                    heatmap: Array.from({ length: 12 }, () => Math.floor(Math.random() * 100)),
+                    result: isPractice ? (isSuccess ? 'COMPLETED' : 'FAILED') : (isSuccess ? 'VICTORY' : 'DEFEAT')
                 });
+
                 setIsSubmitting(false);
                 setShowResults(true);
                 setShowScoreImpact(false);
 
-                // Animate bars after a short delay to ensure modal is rendered
                 setTimeout(() => {
                     const bars = document.querySelectorAll('.benchmark-bar');
                     if (bars.length > 0) {
@@ -369,8 +416,8 @@ export const GameSpace: React.FC = () => {
                     }
                 }, 600);
             }, 3500);
-        }, 2000);
-    }, [isSubmitting, isComplete, socketSubmit, code, isPractice, timeLeft, selectedProblem]);
+        }
+    }, [verdict, isSubmitting, isPractice, timeLeft, selectedProblem, liveComplexity]);
 
     const handleAutoSubmit = useCallback(() => {
         clearInterval(timerRef.current);
@@ -423,18 +470,25 @@ export const GameSpace: React.FC = () => {
 
     return (
         <div className="h-screen bg-[#020202] text-white flex flex-col font-sans selection:bg-white selection:text-black overflow-hidden" ref={containerRef}>
-            {/* ── Match Header ── */}
             <header className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-black/80 backdrop-blur-xl z-20">
                 <div className="flex items-center gap-6">
                     <button
                         onClick={() => setIsMenuOpen(true)}
                         className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all group"
+                        title="Main Menu"
                     >
                         <Menu size={18} className="group-hover:scale-110 transition-transform" />
                     </button>
+                    <button
+                        onClick={() => setShowProblem(!showProblem)}
+                        className={`p-3 rounded-xl border transition-all group ${showProblem ? 'bg-white/10 border-white/20 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
+                        title="Toggle Problem Info"
+                    >
+                        <Layers size={18} className="group-hover:scale-110 transition-transform" />
+                    </button>
                     <div className="flex items-center gap-2">
                         {isPractice ? <Shield size={18} className="text-blue-500" /> : <Activity size={18} className="text-green-500" />}
-                        <span className="text-sm font-black tracking-widest uppercase">
+                        <span className="text-sm font-black tracking-widest uppercase hidden md:inline">
                             {isPractice ? 'Practice_Lab' : 'Ranked_Dual'}
                         </span>
                     </div>
@@ -447,6 +501,38 @@ export const GameSpace: React.FC = () => {
                         {signalStrength === 'weak' && <SignalLow size={14} className="text-yellow-500" />}
                         {signalStrength === 'critical' && <WifiOff size={14} className="text-red-500" />}
                         <span className="text-[10px] font-mono opacity-50 uppercase">{signalStrength}</span>
+                    </div>
+
+                    <div className="relative group">
+                        <button
+                            onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
+                        >
+                            <span className="text-[10px] font-black text-accent-secondary uppercase tracking-[0.2em]">
+                                {SUPPORTED_LANGUAGES.find(l => l.id === language)?.name}
+                            </span>
+                            <div className={`w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-gray-500 transition-transform ${showLanguageDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showLanguageDropdown && (
+                            <div className="absolute top-12 left-0 w-32 bg-[#0a0a0a]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 z-50 shadow-2xl animate-in zoom-in-95 duration-200">
+                                {SUPPORTED_LANGUAGES.map((lang) => (
+                                    <button
+                                        key={lang.id}
+                                        onClick={() => {
+                                            setLanguage(lang.id);
+                                            setShowLanguageDropdown(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${language === lang.id
+                                            ? 'bg-accent-secondary text-white'
+                                            : 'text-gray-500 hover:bg-white/5 hover:text-white'
+                                            }`}
+                                    >
+                                        {lang.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className={`flex flex-col items-center px-6 py-1 rounded-2xl border transition-all duration-300 ${isRunning ? (isPractice ? 'border-blue-500/20 bg-blue-500/5' : 'border-red-500/20 bg-red-500/5') : 'border-white/5 bg-white/2'}`}>
@@ -467,9 +553,37 @@ export const GameSpace: React.FC = () => {
                 {/* Action Controls */}
                 <div className="flex items-center gap-4">
                     {!isRunning ? (
-                        <button onClick={handleStartMatch} className="bg-white text-black px-6 py-2 rounded-xl font-black text-xs tracking-widest uppercase hover:scale-105 transition-all shadow-xl">
-                            {isPractice ? 'Start Session' : 'Begin Uplink'}
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {!isPractice && (
+                                <div className="flex items-center gap-1 p-1 bg-white/5 border border-white/10 rounded-xl">
+                                    {[
+                                        { label: 'Blitz', seconds: 120, rp: '1.2×' },
+                                        { label: 'Standard', seconds: 300, rp: '1.0×' },
+                                        { label: 'Deep Focus', seconds: 600, rp: '0.8×' },
+                                    ].map(mode => (
+                                        <button
+                                            key={mode.seconds}
+                                            onClick={() => setSelectedProblem(p => ({ ...p, timeLimit: mode.seconds }))}
+                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-[0.15em] transition-all flex flex-col items-center leading-tight ${selectedProblem.timeLimit === mode.seconds
+                                                ? 'bg-white text-black shadow'
+                                                : 'text-gray-500 hover:text-white'}`}
+                                        >
+                                            <span>{mode.label}</span>
+                                            <span className={`text-[8px] ${selectedProblem.timeLimit === mode.seconds ? 'text-black/50' : 'text-accent-secondary opacity-70'}`}>{mode.rp} RP</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <button
+                                onClick={() => {
+                                    setTimeLeft(isPractice ? 0 : selectedProblem.timeLimit);
+                                    handleStartMatch();
+                                }}
+                                className="bg-white text-black px-6 py-2 rounded-xl font-black text-xs tracking-widest uppercase hover:scale-105 transition-all shadow-xl"
+                            >
+                                {isPractice ? 'Start Session' : 'Begin Uplink'}
+                            </button>
+                        </div>
                     ) : (
                         <div className="flex items-center gap-3">
                             <div className="flex flex-col items-end">
@@ -505,46 +619,51 @@ export const GameSpace: React.FC = () => {
             </header>
 
             {/* ── Main Workspace ── */}
-            <main className="flex-1 flex overflow-hidden">
+            <main 
+                className="flex-1 grid overflow-hidden bg-[#020202]"
+                style={{ 
+                    gridTemplateColumns: showProblem ? '450px 1fr 384px' : '0px 1fr 384px' 
+                }}
+            >
                 {/* ── Left: Problem Description ── */}
                 <aside
-                    className={`border-r border-white/10 flex flex-col bg-[#050505] overflow-hidden transition-all duration-500 ease-in-out ${showProblem ? 'w-[450px] opacity-100' : 'w-0 opacity-0'}`}
+                    className={`border-r border-white/10 flex flex-col bg-[#050505] overflow-hidden transition-all duration-500 ease-in-out ${showProblem ? 'opacity-100' : 'opacity-0'}`}
                 >
-                    <div className="p-8 overflow-y-auto flex-1 custom-scrollbar min-w-[450px]">
+                    <div className="p-8 overflow-y-auto flex-1 custom-scrollbar w-full">
                         <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-3xl font-black tracking-tighter uppercase">{selectedProblem.title}</h2>
+                            <h2 className="text-3xl font-black tracking-tighter uppercase text-white">{selectedProblem.title}</h2>
                             <button onClick={() => setShowProblem(false)} className="p-2 text-gray-500 hover:text-white">
                                 <X size={20} />
                             </button>
                         </div>
 
                         <div className="space-y-8">
-                            <p className="text-xl text-gray-400 font-light leading-relaxed">{selectedProblem.description}</p>
+                            <p className="text-xl text-gray-200 font-light leading-relaxed">{selectedProblem.description}</p>
 
                             <div className="space-y-6">
                                 {selectedProblem.examples.map((ex, i) => (
-                                    <div key={i} className="p-6 rounded-3xl bg-white/2 border border-white/5 space-y-4 font-mono text-sm group hover:border-white/10 transition-colors">
+                                    <div key={i} className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4 font-mono text-sm group hover:border-white/20 transition-colors">
                                         <div className="flex justify-between items-start">
-                                            <span className="text-[10px] font-black text-gray-600 uppercase">Example {i + 1}</span>
-                                            <Zap size={14} className="text-gray-700" />
+                                            <span className="text-[10px] font-black text-accent-secondary uppercase">Example {i + 1}</span>
+                                            <Zap size={14} className="text-accent-secondary/50" />
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-gray-500 text-[10px] uppercase">Input</p>
-                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-blue-400">{ex.input}</div>
+                                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-blue-400">{ex.input}</div>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-gray-500 text-[10px] uppercase">Output</p>
-                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-green-400">{ex.output}</div>
+                                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-green-400">{ex.output}</div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="p-8 rounded-3xl bg-white/2 border border-white/5 space-y-4">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Constraints</h3>
+                            <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                                <h3 className="text-xs font-black uppercase tracking-widest text-accent-secondary">Constraints</h3>
                                 <div className="flex flex-wrap gap-2">
-                                    {selectedProblem.constraints.map((c, i) => (
-                                        <code key={i} className="px-3 py-1.5 rounded-lg bg-black text-xs font-mono text-gray-400 border border-white/5">{c}</code>
+                                    {Array.isArray(selectedProblem.constraints) && selectedProblem.constraints.map((c, i) => (
+                                        <code key={i} className="px-3 py-1.5 rounded-lg bg-black text-xs font-mono text-gray-300 border border-white/10">{c}</code>
                                     ))}
                                 </div>
                             </div>
@@ -553,10 +672,11 @@ export const GameSpace: React.FC = () => {
                 </aside>
 
                 {/* ── Center: Editor ── */}
-                <section className={`flex-1 flex flex-col transition-all duration-700 bg-black relative ${!isRunning ? 'blur-sm grayscale opacity-30 pointer-events-none scale-105' : ''}`}>
+                <section className={`flex flex-col transition-all duration-700 bg-black relative ${!isRunning ? 'blur-sm grayscale opacity-30 pointer-events-none scale-105' : ''}`}>
                     <div className="flex-1 min-h-0 relative">
                         <Editor
                             height="100%"
+                            language={language}
                             defaultLanguage="javascript"
                             theme="vs-dark"
                             value={code}
@@ -594,7 +714,9 @@ export const GameSpace: React.FC = () => {
                 </section>
 
                 {/* ── Right: Analytics & Opponent ── */}
-                <aside className="w-96 border-l border-white/10 flex flex-col bg-[#050505]">
+                <aside 
+                    className="border-l border-white/10 flex flex-col bg-[#050505] overflow-hidden"
+                >
                     {/* Real-time Analytics */}
                     <div className="p-6 border-b border-white/10 space-y-6">
                         <div className="flex items-center justify-between">
@@ -767,7 +889,7 @@ export const GameSpace: React.FC = () => {
                             </div>
                         </div>
                         <p className="text-gray-400 text-sm leading-relaxed">
-                            Leaving a live session will result in immediate rating penalty and disconnection from the arena protocols. Confirm termination?
+                            Leaving a live session will result in immediate rating penalty and disconnection from CodeArena. Confirm termination?
                         </p>
                         <div className="flex gap-4">
                             <button

@@ -8,6 +8,7 @@ import {
     Activity, Mail, Lock, User, ArrowRight,
     Zap, Shield, Sword, Eye, EyeOff,
 } from 'lucide-react';
+import { Logo } from '../components/ui/Logo';
 
 export const Login: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -134,10 +135,7 @@ export const Login: React.FC = () => {
 
             {/* Side brand strip */}
             <div className="hidden lg:flex flex-col justify-between absolute left-10 top-0 bottom-0 py-10">
-                <div className="flex items-center gap-2">
-                    <Activity size={18} className="text-accent-secondary" />
-                    <span className="font-bold tracking-tight text-sm">Arena<span className="text-white/40">Protocol</span></span>
-                </div>
+                <Logo />
                 <div className="space-y-6">
                     {[
                         { icon: <Zap size={16} />, label: 'Voice Coding Combat' },
@@ -150,7 +148,7 @@ export const Login: React.FC = () => {
                         </div>
                     ))}
                 </div>
-                <p className="text-[10px] text-white/20 font-mono">ARENA PROTOCOL v2.0</p>
+                <p className="text-[10px] text-white/20 font-mono">CODEARENA v2.0</p>
             </div>
 
             {/* Auth card */}
@@ -161,11 +159,9 @@ export const Login: React.FC = () => {
 
                 <div className="relative rounded-2xl border border-white/10 bg-[#0a0a0e]/95 backdrop-blur-xl p-8 shadow-[0_0_60px_rgba(124,58,237,0.08)]">
                     {/* Header */}
-                    <div className="mb-8 text-center">
-                        <div className="mx-auto mb-5 w-12 h-12 rounded-xl border border-accent-secondary/30 bg-accent-secondary/10 flex items-center justify-center shadow-[0_0_20px_rgba(124,58,237,0.2)]">
-                            <Activity size={22} className="text-accent-secondary" />
-                        </div>
-                        <h1 className="text-2xl font-bold tracking-tight">Arena Protocol</h1>
+                    <div className="mb-8 text-center flex flex-col items-center">
+                        <Logo className="mb-4" size={40} showText={false} />
+                        <h1 className="text-2xl font-bold tracking-tight">CodeArena</h1>
                         <p className="text-sm text-white/40 mt-1">
                             {isLogin ? 'Authenticate to enter the battlefield' : 'Register as a new operator'}
                         </p>

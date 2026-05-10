@@ -15,11 +15,22 @@ export class MatchesController {
     async getRecentMatches(req: any, res: Response) {
         try {
             const userId = (req.query.userId as string) || req.user.id;
-            const matches = await matchesService.getRecentMatches(userId);
-            res.json(matches);
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+            const matches = await matchesService.getRecentMatches(userId, limit);
+            res.json({ data: matches, total: matches.length });
         } catch (err: any) {
             console.error('Error fetching recent matches:', err);
             res.status(500).json({ message: 'Error fetching recent matches' });
+        }
+    }
+
+    async getMatchesByUserId(req: any, res: Response) {
+        try {
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+            const matches = await matchesService.getRecentMatches(req.params.userId, limit);
+            res.json({ data: matches, total: matches.length });
+        } catch (err: any) {
+            res.status(500).json({ message: 'Error fetching matches' });
         }
     }
 

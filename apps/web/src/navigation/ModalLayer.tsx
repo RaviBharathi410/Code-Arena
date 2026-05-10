@@ -48,7 +48,7 @@ const ConfirmLeaveModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
-                Leaving a live session will result in immediate rating penalty and disconnection from the arena protocols. Confirm termination?
+                Leaving a live session will result in immediate rating penalty and disconnection from CodeArena. Confirm termination?
             </p>
             <div className="flex gap-4">
                 <button

@@ -8,6 +8,7 @@ import { MatchmakingService } from '../modules/matchmaking/matchmaking.service';
 import { redis } from '../lib/redis';
 import { logger } from '../lib/logger';
 import { matchesService } from '../modules/matches/matches.service';
+import { codeExecutionQueue } from '../queues/code-execution.queue';
 
 export class BattleHandler {
     private matchmaking: MatchmakingService;
@@ -40,6 +41,7 @@ export class BattleHandler {
         socket.on('join_match', (matchId) => this.handleJoinMatch(socket, matchId));
         socket.on('code_update', (data) => this.handleCodeUpdate(socket, data));
         socket.on('rejoin_match', (matchId) => this.handleRejoinMatch(socket, matchId));
+        socket.on('submit_code', (data) => this.handleSubmitCode(socket, data));
     }
 
     private async handleDisconnect(socket: CustomSocket) {
@@ -96,6 +98,17 @@ export class BattleHandler {
         socket.join(matchId);
         socket.data.matchId = matchId; // Store matchId in socket session
         logger.debug(`User ${socket.user?.id} joined match room ${matchId}`);
+
+        // Fetch current match state from Redis (if any exists yet)
+        if (socket.user) {
+            const myCode = await redis.get(`match:${matchId}:code:${socket.user.id}`);
+            if (myCode) {
+                socket.emit('match:sync_state', {
+                    userId: socket.user.id,
+                    code: myCode
+                });
+            }
+        }
     }
 
     private async handleRejoinMatch(socket: CustomSocket, matchId: string) {
@@ -108,13 +121,106 @@ export class BattleHandler {
         socket.join(matchId);
         socket.data.matchId = matchId;
 
+        // Fetch latest match state to resync the reconnected user
+        const myCode = await redis.get(`match:${matchId}:code:${userId}`);
+        
+        // Also fetch opponent's code state if we want to immediately sync them
+        // This requires knowing the opponent's ID, which we'd typically get from the match metadata in Redis
+        const matchMetaStr = await redis.get(`match:${matchId}`);
+        let opponentCode = null;
+        let opponentId = null;
+
+        if (matchMetaStr) {
+            const matchMeta = JSON.parse(matchMetaStr);
+            opponentId = matchMeta.player1Id === userId ? matchMeta.player2Id : matchMeta.player1Id;
+            if (opponentId) {
+                opponentCode = await redis.get(`match:${matchId}:code:${opponentId}`);
+            }
+        }
+
+        socket.emit('match:sync_state', {
+            userId: userId,
+            code: myCode || '',
+            opponentId,
+            opponentCode: opponentCode || ''
+        });
+
         this.io.to(matchId).emit('OPPONENT_RECONNECTED', { userId });
     }
 
-    private handleCodeUpdate(socket: CustomSocket, { matchId, code }: { matchId: string, code: string }) {
+    private async handleCodeUpdate(socket: CustomSocket, { matchId, code }: { matchId: string, code: string }) {
+        if (!socket.user) return;
+        
+        // Persist code state to Redis with a TTL (e.g., 2 hours)
+        await redis.setex(`match:${matchId}:code:${socket.user.id}`, 7200, code);
+
         socket.to(matchId).emit('opponent_code_update', {
-            playerId: socket.user?.id,
+            playerId: socket.user.id,
             code
         });
+    }
+
+    private async handleSubmitCode(socket: CustomSocket, {
+        matchId, code, language
+    }: { matchId: string, code: string, language: string }) {
+        if (!socket.user) return;
+        const userId = socket.user.id;
+
+        // Language ID mapping for Judge0
+        const LANGUAGE_MAP: Record<string, number> = {
+            javascript: 63,
+            python: 71,
+            java: 62,
+            cpp: 54,
+            typescript: 74,
+        };
+        const languageId = LANGUAGE_MAP[language] || 63;
+
+        try {
+            // 1. Fetch match + problem from DB
+            const match = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
+            if (!match) return;
+
+            const problem = await db.query.problems.findFirst({ where: eq(problems.id, match.problemId) });
+            if (!problem) return;
+
+            // 2. Record submission start time in Redis
+            const startTimeStr = await redis.get(`match:${matchId}:startedAt`);
+            const startTime = startTimeStr ? parseInt(startTimeStr) : Date.now();
+            const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+            await redis.setex(`match:${matchId}:timeTaken:${userId}`, 7200, timeTaken.toString());
+
+            // 3. Create a Submission record in the DB
+            const submissionId = crypto.randomUUID();
+            await db.insert(submissions).values({
+                id: submissionId,
+                matchId,
+                userId,
+                code,
+                languageId,
+                status: 'pending',
+                submittedAt: new Date(),
+            });
+
+            // 4. Enqueue code execution job
+            await codeExecutionQueue.add('execute', {
+                submissionId,
+                code,
+                languageId,
+                problemId: match.problemId,
+                matchId,
+                userId,
+                testCases: problem.testCases,
+            });
+
+            logger.info({ submissionId, matchId, userId }, '[SOCKET] Code submitted, execution queued');
+
+            // 5. Notify user that their code is being evaluated
+            socket.emit('submission:queued', { submissionId });
+
+        } catch (err: any) {
+            logger.error({ err, matchId, userId }, '[SOCKET] Failed to submit code');
+            socket.emit('match:error', { message: 'Failed to queue code for execution.' });
+        }
     }
 }

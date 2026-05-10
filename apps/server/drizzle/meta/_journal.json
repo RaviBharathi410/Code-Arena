@@ -1,12 +1,12 @@
 {
   "version": "5",
-  "dialect": "sqlite",
+  "dialect": "pg",
   "entries": [
     {
       "idx": 0,
       "version": "5",
-      "when": 1771872661433,
-      "tag": "0000_curved_lila_cheney",
+      "when": 1777645448996,
+      "tag": "0000_furry_prodigy",
       "breakpoints": true
     }
   ]

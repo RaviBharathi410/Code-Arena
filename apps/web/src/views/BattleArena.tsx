@@ -142,11 +142,13 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
         }
     };
 
+    const { isLight } = useLayout();
+
     return (
-        <div className="flex flex-col h-full space-y-6" ref={arenaRef}>
+        <div className={`flex flex-col h-full space-y-6 transition-colors duration-500 ${isLight ? 'text-black' : 'text-white'}`} ref={arenaRef}>
             <header className="flex items-center justify-between" ref={headerRef}>
                 <div className="flex items-center gap-6">
-                    <button onClick={handleExitClick} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-500 hover:text-white">
+                    <button onClick={handleExitClick} className={`p-2 rounded-full transition-colors ${isLight ? 'hover:bg-black/5 text-gray-400 hover:text-black' : 'hover:bg-white/5 text-gray-500 hover:text-white'}`}>
                         <X size={20} />
                     </button>
                     <div className="flex items-center gap-4">
@@ -154,7 +156,7 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                             <Activity size={24} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-white tracking-tight">Cyber Battle Arena</h2>
+                            <h2 className={`text-xl font-bold tracking-tight ${isLight ? 'text-black' : 'text-white'}`}>Cyber Battle Arena</h2>
                             <div className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest font-semibold">
                                 <span className="text-accent-secondary">Live Match</span>
                                 <span>•</span>
@@ -187,7 +189,7 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
             <main className="flex-1 min-h-0">
                 {!isMatchActive ? (
                     <div className="h-full flex items-center justify-center">
-                        <GlassCard className="max-w-md w-full text-center border-accent-secondary/20 p-10">
+                        <GlassCard className={`max-w-md w-full text-center border-accent-secondary/20 p-10 ${isLight ? 'bg-white shadow-2xl' : ''}`}>
                             <div className="w-16 h-16 rounded-2xl bg-accent-secondary/10 flex items-center justify-center text-accent-secondary mx-auto mb-6">
                                 <Sword size={32} />
                             </div>
@@ -206,17 +208,17 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                     <div className="h-full grid grid-cols-1 lg:grid-cols-4 gap-6">
                         {/* Objectives Panel */}
                         <div className="lg:col-span-1 space-y-6">
-                            <GlassCard className="h-full flex flex-col border-white/5 battle-card">
+                            <GlassCard className={`h-full flex flex-col border-white/5 battle-card ${isLight ? 'bg-white shadow-xl border-black/5' : ''}`}>
                                 <div className="flex items-center gap-2 mb-4 text-accent-secondary">
                                     <Target size={18} />
                                     <h3 className="font-bold uppercase tracking-wider text-sm">Objectives</h3>
                                 </div>
                                 <h4 className="text-lg font-bold mb-2">{currentProblem?.title || 'Loading Protocol...'}</h4>
-                                <div className="text-xs inline-block px-2 py-1 rounded bg-white/5 text-gray-400 mb-4 self-start">
+                                <div className={`text-xs inline-block px-2 py-1 rounded self-start mb-4 ${isLight ? 'bg-black/5 text-gray-500' : 'bg-white/5 text-gray-400'}`}>
                                     {currentProblem?.difficulty || 'Standard'}
                                 </div>
                                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                                    <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap">
+                                    <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
                                         {currentProblem?.description || 'Synchronizing currentProblem data from server...'}
                                     </p>
                                 </div>
@@ -231,23 +233,23 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                                         <div className="w-2 h-2 rounded-full bg-accent-secondary" />
                                         <span>Local Uplink [{currentUser.username || 'You'}]</span>
                                     </div>
-                                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                                    <div className={`flex items-center gap-1 p-1 rounded-lg ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                                         <button
                                             onClick={() => setActiveTab('code')}
-                                            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${activeTab === 'code' ? 'bg-accent-secondary/15 text-accent-secondary' : 'text-gray-500 hover:text-white'}`}
+                                            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${activeTab === 'code' ? 'bg-accent-secondary/15 text-accent-secondary' : (isLight ? 'text-gray-400 hover:text-black' : 'text-gray-500 hover:text-white')}`}
                                         >
                                             <Code2 size={12} /> Code
                                         </button>
                                         <button
                                             onClick={() => setActiveTab('notes')}
-                                            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${activeTab === 'notes' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-500 hover:text-white'}`}
+                                            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${activeTab === 'notes' ? 'bg-purple-500/20 text-purple-400' : (isLight ? 'text-gray-400 hover:text-black' : 'text-gray-500 hover:text-white')}`}
                                         >
                                             <FileText size={12} /> Notes
                                         </button>
                                     </div>
                                 </div>
 
-                                <GlassCard className="flex-1 border-accent-secondary/25 p-0 overflow-hidden group">
+                                <GlassCard className={`flex-1 p-0 overflow-hidden group ${isLight ? 'bg-white border-accent-secondary/40 shadow-2xl' : 'border-accent-secondary/25'}`}>
                                     {activeTab === 'code' ? (
                                         <Editor
                                             height="100%"
@@ -266,9 +268,9 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                                             }}
                                         />
                                     ) : (
-                                        <div className="h-full w-full bg-[#1e1e1e] p-4">
+                                        <div className={`h-full w-full p-4 ${isLight ? 'bg-white' : 'bg-[#1e1e1e]'}`}>
                                             <textarea
-                                                className="w-full h-full bg-transparent text-gray-300 resize-none outline-none font-mono text-sm custom-scrollbar"
+                                                className={`w-full h-full bg-transparent resize-none outline-none font-mono text-sm custom-scrollbar ${isLight ? 'text-black' : 'text-gray-300'}`}
                                                 placeholder="// Draft your algorithm approach, pseudo-code, or Big-O thoughts here..."
                                                 value={notes}
                                                 onChange={(e) => setNotes(e.target.value)}
@@ -310,8 +312,8 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
             </main>
 
             {winner && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0A0A0F]/90 backdrop-blur-xl">
-                    <GlassCard className={`max-w-xl w-full text-center p-10 transition-all ${winner === 'you' ? 'border-green-500/50 shadow-[0_0_50px_rgba(34,197,94,0.15)]' : 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.15)]'
+                <div className={`fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-xl ${isLight ? 'bg-white/80' : 'bg-[#0A0A0F]/90'}`}>
+                    <GlassCard className={`max-w-xl w-full text-center p-10 transition-all ${isLight ? 'bg-white shadow-2xl' : ''} ${winner === 'you' ? 'border-green-500/50 shadow-[0_0_50px_rgba(34,197,94,0.15)]' : 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.15)]'
                         }`}>
                         <div className={`w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 ${winner === 'you' ? 'bg-green-500/10 text-green-500 border border-green-500/30' : 'bg-red-500/10 text-red-500 border border-red-500/30'
                             }`}>
@@ -325,19 +327,19 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                         </p>
 
                         {/* Big-O Complexity Metrics Card */}
-                        <div className="bg-black/50 rounded-2xl border border-white/10 p-6 mb-8 text-left">
+                        <div className={`rounded-2xl border p-6 mb-8 text-left ${isLight ? 'bg-black/5 border-black/5 shadow-inner' : 'bg-black/50 border-white/10'}`}>
                             <div className="flex items-center gap-2 mb-4 text-accent-secondary">
                                 <BrainCircuit size={18} />
-                                <h3 className="font-bold uppercase tracking-wider text-sm">Algorithm Analysis</h3>
+                                <h3 className={`font-bold uppercase tracking-wider text-sm ${isLight ? 'text-black' : 'text-white'}`}>Algorithm Analysis</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                <div className={`rounded-xl p-4 border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-white/5 border-white/5'}`}>
                                     <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Time Complexity</div>
-                                    <div className="text-2xl font-mono text-white tracking-tighter">{complexity.time}</div>
+                                    <div className={`text-2xl font-mono tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{complexity.time}</div>
                                 </div>
-                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                <div className={`rounded-xl p-4 border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-white/5 border-white/5'}`}>
                                     <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Space Complexity</div>
-                                    <div className="text-2xl font-mono text-white tracking-tighter">{complexity.space}</div>
+                                    <div className={`text-2xl font-mono tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{complexity.space}</div>
                                 </div>
                             </div>
                         </div>
@@ -361,7 +363,7 @@ export const BattleArena: React.FC<{ currentUser: User, matchId: string, problem
                             </div>
                         </div>
                         <p className="text-gray-400 text-sm leading-relaxed">
-                            Leaving a live session will result in immediate rating penalty and disconnection from the arena protocols. Confirm termination?
+                            Leaving a live session will result in immediate rating penalty and disconnection from CodeArena. Confirm termination?
                         </p>
                         <div className="flex gap-4">
                             <button

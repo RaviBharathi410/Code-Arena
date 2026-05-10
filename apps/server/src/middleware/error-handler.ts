@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { env } from '../config/env';
+import { monitor } from '../lib/monitor';
 
 /**
  * Global error handling middleware.
@@ -55,6 +56,11 @@ export const errorHandler = (
 
     // Generic fallback
     const status = err.status ?? err.statusCode ?? 500;
+    
+    if (status >= 500) {
+        monitor.trackInternalError(err.name || 'Error', req.path);
+    }
+
     res.status(status).json({
         message: isProd ? 'Internal server error' : err.message,
         ...(isProd ? {} : { stack: err.stack }),

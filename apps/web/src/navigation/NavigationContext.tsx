@@ -30,8 +30,10 @@ interface NavigationContextType {
     goToTournaments: () => void;
     goToLeaderboard: () => void;
     goToProfile: () => void;
+    goToUserProfile: (userId: string) => void;
     goToSettings: () => void;
-    goToOpponents: () => void;
+    goToOpponents: (problemId?: string) => void;
+    goToProblems: () => void;
     goToBattleLobby: () => void;
     goToTournament: () => void;
     goToArenaSolo: () => void;
@@ -74,11 +76,13 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Merge search params into NavParams
         const practiceType = searchParams.get('type') || undefined;
         const matchIdFromQuery = searchParams.get('id') || undefined;
+        const problemIdFromQuery = searchParams.get('problemId') || undefined;
         const mergedParams: NavParams = {
             ...params,
             practiceType: practiceType ?? params.practiceType,
             matchId: matchIdFromQuery ?? params.matchId,
             matchState: location.state ?? undefined,
+            problemId: problemIdFromQuery ?? params.problemId,
         };
 
         if (page !== state.currentPage || JSON.stringify(mergedParams) !== JSON.stringify(state.params)) {
@@ -123,8 +127,10 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const goToTournaments = useCallback(() => navigateTo(PAGES.TOURNAMENTS), [navigateTo]);
     const goToLeaderboard = useCallback(() => navigateTo(PAGES.LEADERBOARD), [navigateTo]);
     const goToProfile = useCallback(() => navigateTo(PAGES.PROFILE), [navigateTo]);
+    const goToUserProfile = useCallback((userId: string) => navigateTo(PAGES.PROFILE, { userId }), [navigateTo]);
     const goToSettings = useCallback(() => navigateTo(PAGES.SETTINGS), [navigateTo]);
-    const goToOpponents = useCallback(() => navigateTo(PAGES.OPPONENTS), [navigateTo]);
+    const goToOpponents = useCallback((problemId?: string) => navigateTo(PAGES.OPPONENTS, problemId ? { problemId } : undefined), [navigateTo]);
+    const goToProblems = useCallback(() => navigateTo(PAGES.PROBLEMS), [navigateTo]);
     const goToBattleLobby = useCallback(() => navigateTo(PAGES.BATTLE), [navigateTo]);
     const goToTournament = useCallback(() => navigateTo(PAGES.TOURNAMENTS), [navigateTo]);
     const goToArenaSolo = useCallback(() => navigateTo(PAGES.ARENA_SOLO), [navigateTo]);
@@ -167,8 +173,10 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         goToTournaments,
         goToLeaderboard,
         goToProfile,
+        goToUserProfile,
         goToSettings,
         goToOpponents,
+        goToProblems,
         goToBattleLobby,
         goToTournament,
         goToArenaSolo,

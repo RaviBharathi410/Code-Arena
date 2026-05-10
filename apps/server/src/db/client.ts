@@ -1,11 +1,8 @@
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '@arena/database';
 import { env } from '../config/env';
-import path from 'path';
 
-// Use the path relative to the server directory
-const dbPath = path.resolve(__dirname, '../../', env.DATABASE_URL);
-const sqlite = new Database(dbPath);
-
-export const db = drizzle(sqlite, { schema });
+// Connection pool with max 20 connections
+const queryClient = postgres(env.DATABASE_URL, { max: 20 });
+export const db = drizzle(queryClient, { schema });

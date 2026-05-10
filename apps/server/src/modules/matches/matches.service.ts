@@ -2,6 +2,8 @@ import { db } from '../../db';
 import { matches, users } from '@arena/database';
 import { eq, desc, or } from 'drizzle-orm';
 import { logger } from '../../lib/logger';
+import { eloQueue, analyticsQueue } from '../../queues';
+import { redis } from '../../lib/redis';
 
 export class MatchesService {
     async getUserMatches(userId: string) {
@@ -14,8 +16,7 @@ export class MatchesService {
                     eq(matches.player2Id, userId)
                 )
             )
-            .orderBy(desc(matches.createdAt))
-            .all();
+            .orderBy(desc(matches.createdAt));
     }
 
     async getRecentMatches(userId: string, limit: number = 10) {
@@ -29,12 +30,13 @@ export class MatchesService {
                 )
             )
             .orderBy(desc(matches.createdAt))
-            .limit(limit)
-            .all();
+            .limit(limit);
     }
 
     async getMatchById(id: string) {
-        const match = await db.select().from(matches).where(eq(matches.id, id)).get();
+        const match = await db.query.matches.findFirst({
+            where: eq(matches.id, id),
+        });
         if (!match) {
             throw new Error('Match not found');
         }
@@ -61,63 +63,89 @@ export class MatchesService {
         return this.setWinner(matchId, winnerId);
     }
 
+    /**
+     * Set the winner of a match.
+     *
+     * Previously this did Elo calculation synchronously in a transaction.
+     * Now it updates the match record and enqueues background jobs for:
+     * 1. Elo recalculation (via eloQueue)
+     * 2. Skill vector analytics (via analyticsQueue) for both players
+     *
+     * This eliminates blocking the request cycle with heavy computation.
+     */
     async setWinner(matchId: string, winnerId: string) {
-        return db.transaction(async (tx) => {
-            const match = await tx.select().from(matches).where(eq(matches.id, matchId)).get();
-            if (!match || match.status !== 'active' || match.winnerId) {
-                return match;
-            }
-
-            // 1. Update Match record
-            const [updatedMatch] = await tx.update(matches)
-                .set({
-                    winnerId,
-                    status: 'completed',
-                    endedAt: new Date().toISOString()
-                })
-                .where(eq(matches.id, matchId))
-                .returning();
-
-            // 2. Fetch players for ELO update
-            const player1 = await tx.select().from(users).where(eq(users.id, match.player1Id)).get();
-            // player2Id is nullable in schema, but for competitive matches it should be present.
-            const player2 = match.player2Id
-                ? await tx.select().from(users).where(eq(users.id, match.player2Id))?.get()
-                : null;
-
-            if (player1 && player2) {
-                const winner = player1.id === winnerId ? player1 : player2;
-                const loser = player1.id === winnerId ? player2 : player1;
-
-                const { winnerGain, loserLoss } = this.calculateEloChange(winner.elo, loser.elo);
-
-                // 3. Apply ELO and stats updates
-                await tx.update(users)
-                    .set({
-                        elo: winner.elo + winnerGain,
-                        wins: (winner.wins || 0) + 1
-                    })
-                    .where(eq(users.id, winner.id));
-
-                await tx.update(users)
-                    .set({
-                        elo: Math.max(0, loser.elo + loserLoss),
-                        losses: (loser.losses || 0) + 1
-                    })
-                    .where(eq(users.id, loser.id));
-
-                logger.info(`[ELO] Match ${matchId} winner determined: ${winner.username} (+${winnerGain}) beat ${loser.username} (${loserLoss})`);
-            }
-
-            return updatedMatch;
+        // 1. Update match record atomically
+        const match = await db.query.matches.findFirst({
+            where: eq(matches.id, matchId),
         });
-    }
 
-    private calculateEloChange(winnerElo: number, loserElo: number) {
-        const K = 32;
-        const expected = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
-        const change = Math.round(K * (1 - expected));
-        return { winnerGain: change, loserLoss: -change };
+        if (!match || match.status !== 'active' || match.winnerId) {
+            return match;
+        }
+
+        const [updatedMatch] = await db.update(matches)
+            .set({
+                winnerId,
+                status: 'completed',
+                endedAt: new Date(),
+            })
+            .where(eq(matches.id, matchId))
+            .returning();
+
+        const loserId = match.player1Id === winnerId ? match.player2Id : match.player1Id;
+
+        if (!loserId) {
+            logger.warn({ matchId }, '[MATCH] No loser found (solo match?)');
+            return updatedMatch;
+        }
+
+        // 2. Enqueue Elo recalculation (async, non-blocking)
+        // Read timeTaken for winner from Redis (set at submission time)
+        const timeTakenStr = await redis.get(`match:${matchId}:timeTaken:${winnerId}`);
+        const timeTaken = timeTakenStr ? parseInt(timeTakenStr) : match.timeLimit ?? 300;
+        const timeLimit = match.timeLimit ?? 300;
+
+        await eloQueue.add('elo-update', {
+            winnerId,
+            loserId,
+            matchId,
+            timeLimit,
+            timeTaken,
+        }, {
+            jobId: `elo-${matchId}`, // Idempotent: same match won't be processed twice
+        });
+
+        logger.info({ matchId, winnerId, loserId }, '[MATCH] Elo recalculation job enqueued');
+
+        // 3. Enqueue analytics update for both players (async, non-blocking)
+        // Fetch the problem to know difficulty
+        const matchWithProblem = await db.query.matches.findFirst({
+            where: eq(matches.id, matchId),
+        });
+
+        const problemDifficulty = 'medium'; // TODO: join with problems table for actual difficulty
+
+        await analyticsQueue.add('analytics-winner', {
+            userId: winnerId,
+            matchId,
+            problemDifficulty,
+            result: 'win',
+            executionTime: null,
+            languageId: 0,
+        });
+
+        await analyticsQueue.add('analytics-loser', {
+            userId: loserId,
+            matchId,
+            problemDifficulty,
+            result: 'loss',
+            executionTime: null,
+            languageId: 0,
+        });
+
+        logger.info({ matchId }, '[MATCH] Analytics jobs enqueued for both players');
+
+        return updatedMatch;
     }
 }
 

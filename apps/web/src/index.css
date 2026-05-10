@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -44,6 +47,35 @@
     --radius: 0.5rem;
 }
 
+.light {
+    --bg-primary: #f9fafb;
+    --bg-secondary: #ffffff;
+    --bg-surface: #ffffff;
+    --text-primary: #000000;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-subtle: rgba(0, 0, 0, 0.05);
+    --border-bright: rgba(124, 58, 237, 0.5);
+    
+    /* shadcn/ui overrides for light */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 263 69% 52%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+}
+
 
 @layer base {
 
@@ -55,6 +87,7 @@
 
     body {
         @apply m-0 bg-bg-primary text-text-primary font-sans antialiased;
+        font-family: 'Inter', sans-serif;
         background-image: theme('backgroundImage.gradient-main');
         background-attachment: fixed;
     }
@@ -62,6 +95,14 @@
     * {
         @apply border-border-subtle;
         box-sizing: border-box;
+    }
+
+    h1, h2, h3, h4, h5, h6, button, .brand-font, .inter-font {
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    .orbitron {
+        font-family: 'Orbitron', sans-serif !important;
     }
 }
 

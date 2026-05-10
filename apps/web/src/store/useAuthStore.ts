@@ -5,7 +5,7 @@ import api from '../lib/api';
 
 interface AuthState {
     user: User | null;
-    token: string | null;        // access token – stored in memory only
+    token: string | null;
     isAuthenticated: boolean;
     authLoading: boolean;
     authError: string | null;
@@ -13,6 +13,8 @@ interface AuthState {
     setAuth: (user: User, accessToken: string) => void;
     logout: () => Promise<void>;
     fetchProfile: () => Promise<void>;
+    updateRating: (newRating: number, change: number) => void;
+    updateStats: (patch: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -52,7 +54,6 @@ export const useAuthStore = create<AuthState>()(
                 const token = get().token;
                 if (!token) return;
 
-                // Force clear legacy mock tokens immediately
                 if (token === 'local-token') {
                     get().logout();
                     return;
@@ -60,23 +61,32 @@ export const useAuthStore = create<AuthState>()(
 
                 set({ authLoading: true, authError: null });
                 try {
-                    const response = await api.get('/auth/profile', {
+                    const response = await api.get('/auth/me', {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    
-                    set({
-                        user: response.data,
-                        authLoading: false
-                    });
+                    set({ user: response.data, authLoading: false });
                 } catch (error: any) {
                     const message = error?.response?.data?.message || error?.message || 'Failed to fetch profile';
-                    // If 401, token might be invalid or expired without refresh
                     if (error?.response?.status === 401) {
-                         set({ user: null, token: null, isAuthenticated: false, authError: 'Session expired', authLoading: false });
+                        set({ user: null, token: null, isAuthenticated: false, authError: 'Session expired', authLoading: false });
                     } else {
-                         set({ authError: message, authLoading: false });
+                        set({ authError: message, authLoading: false });
                     }
                 }
+            },
+
+            // Live ELO update — called when a match:eloUpdate socket event arrives
+            updateRating: (newRating: number, change: number) => {
+                const current = get().user;
+                if (!current) return;
+                set({ user: { ...current, rating: newRating } });
+            },
+
+            // Generic patch for wins/losses/xp after a match result
+            updateStats: (patch: Partial<User>) => {
+                const current = get().user;
+                if (!current) return;
+                set({ user: { ...current, ...patch } });
             },
         }),
         {

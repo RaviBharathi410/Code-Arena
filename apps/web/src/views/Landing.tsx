@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import { ChevronDown, Github, X, Check, Terminal, Shield, Zap, MessageSquare, BookOpen, Activity, Users, FileCode, Server, Code2 } from 'lucide-react';
-import logoMark from '../assets/codearena-mark.png';
+import { Logo } from '../components/ui/Logo';
 import { useLenis } from '../hooks/useLenis';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -518,12 +518,7 @@ export const Landing: React.FC = () => {
             {/* Top nav (matches reference: links + login/signup) */}
             <div ref={navbarRef} className="fixed top-0 left-0 right-0 z-50 mx-auto w-full max-w-6xl px-6 pt-8" style={{ borderBottom: '1px solid transparent' }}>
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-white/[0.03] border border-white/10 backdrop-blur-xl flex items-center justify-center overflow-hidden">
-                            <img src={logoMark} alt="CodeArena" className="h-7 w-7" />
-                        </div>
-                        <div className="text-sm font-semibold tracking-tight text-white/90">CodeArena</div>
-                    </div>
+                    <Logo isLight={false} />
 
                     <div className="hidden lg:flex items-center gap-8 text-xs font-medium text-white/55">
                         {LINKS.map((l) => (
@@ -889,7 +884,7 @@ export const Landing: React.FC = () => {
                 </div>
                 <div className="mt-8 space-y-8 max-w-3xl mx-auto" data-reveal>
                             {[
-                                { date: 'Oct 24', tag: 'Feature', title: 'Arena Protocol v2.1 Live', desc: 'Introduced PostgreSQL backing for realtime scoreboard analytics. Enjoy lag-free leaderboard computations.' },
+                                { date: 'Oct 24', tag: 'Feature', title: 'CodeArena v2.1 Live', desc: 'Introduced PostgreSQL backing for realtime scoreboard analytics. Enjoy lag-free leaderboard computations.' },
                                 { date: 'Oct 12', tag: 'Improvement', title: 'Voice Input Accuracy Boost', desc: 'New NLP tokenizer handles Python indentations and React TSX fragments perfectly out of the box.' },
                                 { date: 'Sep 29', tag: 'Event', title: 'Season 1 Tournament Wrap-Up', desc: 'Check out the top 10 operator loadouts and coding strategies that dominated the finals.' }
                             ].map(post => (
@@ -1020,7 +1015,7 @@ export const Landing: React.FC = () => {
                                 <MessageSquare size={20} />
                             </div>
                             <div className="text-sm font-semibold text-white/90">Community Discord</div>
-                            <div className="text-[11px] leading-relaxed text-white/50 mt-2">Join 5,000+ engineers discussing the Arena protocol & queuing daily.</div>
+                            <div className="text-[11px] leading-relaxed text-white/50 mt-2">Join 5,000+ engineers discussing CodeArena & queuing daily.</div>
                         </Surface>
                         
                         <Surface className="p-6 flex-1 flex flex-col justify-center items-center text-center group hover:bg-emerald-500/5 transition-colors cursor-pointer border-transparent hover:border-emerald-500/30">
@@ -1064,9 +1059,7 @@ export const Landing: React.FC = () => {
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-10">
                         <div className="max-w-sm">
                             <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-white/[0.03] border border-white/10 backdrop-blur-xl flex items-center justify-center overflow-hidden">
-                                    <img src={logoMark} alt="CodeArena" className="h-7 w-7" />
-                                </div>
+                                <Logo isLight={false} />
                                 <div>
                                     <div className="text-sm font-medium tracking-tight">CodeArena</div>
                                     <div className="text-xs text-white/45 leading-relaxed mt-1">

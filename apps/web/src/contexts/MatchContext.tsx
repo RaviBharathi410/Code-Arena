@@ -13,6 +13,7 @@ interface MatchState {
     opponentCode: string;
     winner: string | null;
     socketConnected: boolean;
+    verdict: any | null;
 }
 
 const initialMatchState: MatchState = {
@@ -23,6 +24,7 @@ const initialMatchState: MatchState = {
     opponentCode: '',
     winner: null,
     socketConnected: false,
+    verdict: null,
 };
 
 // ── Actions ───────────────────────────────────────────────────────────────
@@ -34,6 +36,7 @@ type MatchAction =
     | { type: 'MATCH_STARTED'; problem: Problem }
     | { type: 'OPPONENT_CODE_UPDATE'; code: string }
     | { type: 'MATCH_RESULT'; winner: string }
+    | { type: 'MATCH_VERDICT'; verdict: any }
     | { type: 'RESET' };
 
 // ── Reducer ───────────────────────────────────────────────────────────────
@@ -45,6 +48,9 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
 
         case 'SOCKET_DISCONNECTED':
             return { ...state, socketConnected: false };
+
+        case 'MATCH_VERDICT':
+            return { ...state, verdict: action.verdict };
 
         case 'JOIN_MATCH':
             return {
@@ -93,6 +99,7 @@ interface MatchContextType {
     isMatchActive: boolean;
     winner: string | null;
     socketConnected: boolean;
+    verdict: any | null;
 
     // Action creators
     joinMatch: (matchId: string) => void;
@@ -125,10 +132,15 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             dispatch({ type: 'MATCH_RESULT', winner });
         });
 
+        const cleanupVerdict = on('match:verdict', (verdict: any) => {
+            dispatch({ type: 'MATCH_VERDICT', verdict });
+        });
+
         return () => {
             cleanupStart();
             cleanupCode();
             cleanupResult();
+            cleanupVerdict();
         };
     }, [on]);
 
@@ -179,6 +191,7 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isMatchActive: state.matchStatus === 'active',
         winner: state.winner,
         socketConnected: connected,
+        verdict: state.verdict,
         joinMatch,
         updateCode,
         submitCode,

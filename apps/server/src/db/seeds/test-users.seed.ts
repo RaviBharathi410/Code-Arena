@@ -21,15 +21,14 @@ export async function seedTestUsers() {
     for (const testUser of testUsers) {
         const passwordHash = await bcrypt.hash(testUser.password, 12);
         try {
-            db.insert(users)
+            await db.insert(users)
                 .values({
                     id: crypto.randomUUID(),
                     username: testUser.username,
                     email: testUser.email,
                     passwordHash: passwordHash,
                 })
-                .onConflictDoNothing()
-                .run();
+                .onConflictDoNothing();
         } catch (err) {
             console.error(`Failed to seed user ${testUser.username}:`, err);
         }

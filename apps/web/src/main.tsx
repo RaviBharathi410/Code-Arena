@@ -4,14 +4,14 @@ import App from './App.tsx'
 import { ScrollProvider } from './contexts/ScrollProvider'
 import { ScrollProgressBar } from './components/ui/ScrollProgressBar'
 import { CursorFollower } from './components/ui/CursorFollower'
+import { TRPCProvider } from './components/providers/TRPCProvider'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <ScrollProvider>
+        <TRPCProvider>
             <ScrollProgressBar />
-            <CursorFollower />
             <App />
-        </ScrollProvider>
+        </TRPCProvider>
     </React.StrictMode>,
 )

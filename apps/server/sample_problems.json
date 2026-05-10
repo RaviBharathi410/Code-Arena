@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Palindrome Number",
+    "description": "Given an integer x, return true if x is a palindrome, and false otherwise.",
+    "difficulty": "easy",
+    "testCases": [
+      { "input": "121", "output": "true" },
+      { "input": "-121", "output": "false" },
+      { "input": "10", "output": "false" }
+    ],
+    "constraints": "-2^31 <= x <= 2^31 - 1",
+    "examples": [
+      { "input": "x = 121", "output": "true" }
+    ],
+    "baseCode": "function isPalindrome(x) {\n\n};"
+  },
+  {
+    "title": "Roman to Integer",
+    "description": "Roman numerals are represented by seven different symbols: I, V, X, L, C, D and M.",
+    "difficulty": "easy",
+    "testCases": [
+      { "input": "\"III\"", "output": "3" },
+      { "input": "\"LVIII\"", "output": "58" },
+      { "input": "\"MCMXCIV\"", "output": "1994" }
+    ],
+    "constraints": "1 <= s.length <= 15",
+    "examples": [
+      { "input": "s = \"III\"", "output": "3" }
+    ],
+    "baseCode": "function romanToInt(s) {\n\n};"
+  }
+]

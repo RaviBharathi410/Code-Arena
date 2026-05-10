@@ -6,6 +6,7 @@ const router = Router();
 
 router.get('/', requireAuth, matchesController.getUserMatches);
 router.get('/recent', requireAuth, matchesController.getRecentMatches);
+router.get('/user/:userId', requireAuth, matchesController.getMatchesByUserId);
 router.get('/:id', requireAuth, matchesController.getMatchById);
 router.post('/:id/forfeit', requireAuth, matchesController.forfeit);
 

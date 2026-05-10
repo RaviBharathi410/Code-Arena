@@ -15,6 +15,7 @@ export const PAGES = {
     ARENA_SOLO: 'arena_solo',
     ARENA_PRACTICE: 'arena_practice',
     ARENA_MATCH: 'arena_match',
+    PROBLEMS: 'problems',
 } as const;
 
 export type PageId = (typeof PAGES)[keyof typeof PAGES];
@@ -43,6 +44,7 @@ export const PAGE_TO_PATH: Record<PageId, string> = {
     [PAGES.ARENA_SOLO]: '/arena/solo',
     [PAGES.ARENA_PRACTICE]: '/arena/practice',
     [PAGES.ARENA_MATCH]: '/arena/:matchId',
+    [PAGES.PROBLEMS]: '/problems',
 };
 
 /** Resolve a URL pathname to a PageId. Handles dynamic segments like /arena/:matchId. */
@@ -63,6 +65,7 @@ export function pathToPage(pathname: string): { page: PageId; params: NavParams 
         '/settings': PAGES.SETTINGS,
         '/opponents': PAGES.OPPONENTS,
         '/arena/solo': PAGES.ARENA_SOLO,
+        '/problems': PAGES.PROBLEMS,
     };
 
     if (staticMap[pathname]) {
@@ -81,6 +84,13 @@ export function pathToPage(pathname: string): { page: PageId; params: NavParams 
         return { page: PAGES.ARENA_MATCH, params };
     }
 
+    // /profile/:userId
+    const profileMatch = pathname.match(/^\/profile\/(.+)$/);
+    if (profileMatch) {
+        params.userId = profileMatch[1];
+        return { page: PAGES.PROFILE, params };
+    }
+
     // Fallback
     return { page: PAGES.DASHBOARD, params };
 }
@@ -93,6 +103,12 @@ export function pageToPath(page: PageId, params?: NavParams): string {
     if (page === PAGES.ARENA_PRACTICE && params?.practiceType) {
         return `/arena/practice?type=${params.practiceType}`;
     }
+    if (page === PAGES.OPPONENTS && params?.problemId) {
+        return `/opponents?problemId=${params.problemId}`;
+    }
+    if (page === PAGES.PROFILE && params?.userId) {
+        return `/profile/${params.userId}`;
+    }
     return PAGE_TO_PATH[page];
 }
 
@@ -102,6 +118,8 @@ export interface NavParams {
     matchId?: string;
     practiceType?: string;
     matchState?: any;
+    problemId?: string;
+    userId?: string;
 }
 
 export interface NavigationState {

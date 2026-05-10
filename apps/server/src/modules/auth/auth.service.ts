@@ -38,7 +38,7 @@ export class AuthService {
         const accessToken = this.generateAccessToken(newUser);
         const { refreshToken, tokenId } = await this.generateRefreshToken(newUser.id);
 
-        return { accessToken, refreshToken, user: { id: newUser.id, username: newUser.username } };
+        return { accessToken, refreshToken, user: { id: newUser.id, username: newUser.username, role: newUser.role } };
     }
 
     async login(identifier: string, passwordAttempt: string) {
@@ -65,7 +65,7 @@ export class AuthService {
         const accessToken = this.generateAccessToken(user);
         const { refreshToken, tokenId } = await this.generateRefreshToken(user.id);
 
-        return { accessToken, refreshToken, user: { id: user.id, username: user.username } };
+        return { accessToken, refreshToken, user: { id: user.id, username: user.username, role: user.role } };
     }
 
     async refresh(oldRefreshToken: string) {
@@ -82,7 +82,7 @@ export class AuthService {
                 // If found but revoked, it's a potential reuse attack
                 if (tokenRecord) {
                     await db.update(refreshTokens)
-                        .set({ revokedAt: new Date().toISOString() })
+                        .set({ revokedAt: new Date() })
                         .where(eq(refreshTokens.userId, tokenRecord.userId));
                 }
                 throw new Error('Unauthorized');
@@ -90,7 +90,7 @@ export class AuthService {
 
             // Mark old token as revoked
             await db.update(refreshTokens)
-                .set({ revokedAt: new Date().toISOString() })
+                .set({ revokedAt: new Date() })
                 .where(eq(refreshTokens.id, tokenRecord.id));
 
             // Issue new tokens
@@ -115,7 +115,7 @@ export class AuthService {
             const payload = jwt.verify(token, env.JWT_SECRET) as any;
             if (payload.type === 'refresh') {
                 await db.update(refreshTokens)
-                    .set({ revokedAt: new Date().toISOString() })
+                    .set({ revokedAt: new Date() })
                     .where(eq(refreshTokens.id, payload.tokenId));
             }
         } catch (err) {
@@ -150,12 +150,13 @@ export class AuthService {
         return safeUser;
     }
 
-    private generateAccessToken(user: { id: string; username: string; elo: number }) {
+    private generateAccessToken(user: { id: string; username: string; role: string; eloRating?: number }) {
         return jwt.sign(
             {
                 sub: user.id,
                 username: user.username,
-                elo: user.elo,
+                role: user.role,
+                elo: user.eloRating ?? 1200,
                 type: 'access'
             },
             env.JWT_SECRET,
@@ -177,7 +178,7 @@ export class AuthService {
             id: tokenId,
             userId,
             tokenHash,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         });
 
         return { refreshToken, tokenId };
