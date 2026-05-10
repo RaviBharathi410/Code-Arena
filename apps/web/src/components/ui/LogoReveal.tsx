@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import gsap from 'gsap';
 
 export const LogoReveal: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {

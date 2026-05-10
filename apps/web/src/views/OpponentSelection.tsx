@@ -3,12 +3,12 @@ import { useNav } from '../navigation/NavigationContext';
 import { useSocket } from '../contexts/SocketContext';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import { gsap } from 'gsap';
-import { Users, Zap, Target, Search, Menu, Clock } from 'lucide-react';
+import { Users, Zap, Target, Search, Menu, Clock, User as UserIcon } from 'lucide-react';
 import { useLayout } from '../components/layout/MainLayout';
 import type { User } from '../types';
 
 export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
-    const { goToArenaMatch, params: navParams, goToProblems } = useNav();
+    const { goToArenaMatch, params: navParams, goToProblems, goToUserProfile } = useNav();
     const { setIsMenuOpen } = useLayout();
     const { connect, connected, on, emit } = useSocket();
 
@@ -69,6 +69,10 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
             opponentId: selectedOpponent.id,
             problemId: navParams.problemId,   // carry the problem into the match
         });
+    };
+
+    const handleUserProfile = (userId: string) => {
+        goToUserProfile(userId);
     };
 
     const problemId = navParams.problemId;
@@ -226,13 +230,13 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                             <div className="space-y-3">
                                 <button
                                     disabled={!selectedOpponent}
-                                    onClick={() => goToUserProfile(selectedOpponent.id)}
+                                    onClick={() => handleUserProfile(selectedOpponent.id)}
                                     className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] transition-all flex items-center justify-center gap-3 border ${selectedOpponent 
                                         ? (isLight ? 'bg-white border-black/10 hover:bg-black/5 text-black' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white')
                                         : 'opacity-20 cursor-not-allowed'
                                     }`}
                                 >
-                                    <User size={14} /> View Profile
+                                    <UserIcon size={14} /> View Profile
                                 </button>
 
                                 <button

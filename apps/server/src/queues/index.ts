@@ -1,13 +1,37 @@
 /**
  * Queue barrel export — exposes all queues, workers, and job types.
  */
-export { codeExecutionQueue, codeExecutionWorker, processJudge0Callback, setSocketIOInstance as setCodeQueueIO } from './code-execution.queue';
-export type { CodeExecutionJobData, CodeExecutionResult } from './code-execution.queue';
+import { codeExecutionQueue, codeExecutionWorker, processJudge0Callback, setSocketIOInstance as setCodeQueueIO } from './code-execution.queue';
+import type { CodeExecutionJobData, CodeExecutionResult } from './code-execution.queue';
 
-export { eloQueue, eloWorker, setSocketIOInstance as setEloQueueIO } from './elo.queue';
-export type { EloJobData } from './elo.queue';
+import { eloQueue, eloWorker, setSocketIOInstance as setEloQueueIO } from './elo.queue';
+import type { EloJobData } from './elo.queue';
 
-export { analyticsQueue, analyticsWorker } from './analytics.queue';
-export type { AnalyticsJobData } from './analytics.queue';
+import { analyticsQueue, analyticsWorker } from './analytics.queue';
+import type { AnalyticsJobData } from './analytics.queue';
 
-export { bullmqConnection } from './connection';
+import { bullmqConnection } from './connection';
+
+// Suppress unhandled connection errors from BullMQ instances when Redis is down
+const bullMqInstances = [
+    codeExecutionQueue, codeExecutionWorker,
+    eloQueue, eloWorker,
+    analyticsQueue, analyticsWorker
+];
+
+bullMqInstances.forEach((instance: any) => {
+    if (instance && typeof instance.on === 'function') {
+        instance.on('error', (err: any) => {
+            // Silently absorb raw BullMQ unhandled connection errors to prevent terminal spam
+        });
+    }
+});
+
+export {
+    codeExecutionQueue, codeExecutionWorker, processJudge0Callback, setCodeQueueIO,
+    eloQueue, eloWorker, setEloQueueIO,
+    analyticsQueue, analyticsWorker,
+    bullmqConnection
+};
+
+export type { CodeExecutionJobData, CodeExecutionResult, EloJobData, AnalyticsJobData };

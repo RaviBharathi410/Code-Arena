@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { problemsController } from './problems.controller';
-import { requireAuth } from '../../middleware/auth.middleware';
 
 const router = Router();
 
 router.get('/', problemsController.getAllProblems);
-router.get('/random', requireAuth, problemsController.getRandomProblem);
-router.get('/:id', problemsController.getProblemById);
+router.get('/random', problemsController.getRandomProblem);
+router.get('/:slug', problemsController.getProblemBySlug);
 
 export default router;

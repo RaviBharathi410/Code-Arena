@@ -4,6 +4,7 @@ import { db } from '../db';
 import { users } from '@arena/database';
 import { eq } from 'drizzle-orm';
 import { logger } from '../lib/logger';
+import { createBullMQRedisClient } from '../lib/redis';
 
 // ── Queue Definition ───────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ export interface AnalyticsJobData {
 }
 
 export const analyticsQueue = new Queue<AnalyticsJobData>('analytics', {
-    connection: bullmqConnection,
+    connection: createBullMQRedisClient(),
     defaultJobOptions: {
         attempts: 2,
         backoff: {
@@ -103,7 +104,7 @@ export const analyticsWorker = new Worker<AnalyticsJobData>(
         return currentVector;
     },
     {
-        connection: bullmqConnection,
+        connection: createBullMQRedisClient(),
         concurrency: 5,
     }
 );

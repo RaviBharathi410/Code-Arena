@@ -1,20 +1,30 @@
 import { db } from '../../db';
 import { problems } from '@arena/database';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, or, ilike } from 'drizzle-orm';
 
 export class ProblemsService {
     async findAll(options: {
         limit?: number,
         offset?: number,
-        difficulty?: string
+        difficulty?: string,
+        category?: string,
+        tag?: string,
+        search?: string
     }) {
         const limit = Math.min(options.limit || 20, 100);
         const offset = options.offset || 0;
-        const difficulty = options.difficulty;
 
-        const whereClause = difficulty
-            ? eq(problems.difficulty, difficulty as any)
-            : undefined;
+        const filters = [];
+        if (options.difficulty) filters.push(eq(problems.difficulty, options.difficulty.toUpperCase()));
+        if (options.category) filters.push(eq(problems.category, options.category));
+        if (options.search) filters.push(or(ilike(problems.title, `%${options.search}%`), ilike(problems.slug, `%${options.search}%`)));
+        
+        // Filtering by tags (Postgres array)
+        if (options.tag) {
+            filters.push(sql`${problems.tags} @> ARRAY[${options.tag}]::text[]`);
+        }
+
+        const whereClause = filters.length > 0 ? and(...filters) : undefined;
 
         const [totalCount] = await db.select({ value: sql<number>`count(*)` })
             .from(problems)
@@ -22,12 +32,16 @@ export class ProblemsService {
 
         const data = await db.select({
             id: problems.id,
+            slug: problems.slug,
             title: problems.title,
             difficulty: problems.difficulty,
+            category: problems.category,
             description: problems.description,
-            examples: problems.examples,
             constraints: problems.constraints,
-            baseCode: problems.baseCode,
+            examples: problems.examples,
+            optimalTimeComplexity: problems.optimalTimeComplexity,
+            optimalSpaceComplexity: problems.optimalSpaceComplexity,
+            tags: problems.tags,
             createdAt: problems.createdAt,
         })
             .from(problems)
@@ -43,18 +57,20 @@ export class ProblemsService {
         };
     }
 
+    async getProblemBySlug(slug: string) {
+        const [problem] = await db.select()
+            .from(problems)
+            .where(or(eq(problems.slug, slug), eq(problems.id, slug)))
+            .limit(1);
+
+        if (!problem) {
+            throw new Error('Problem not found');
+        }
+        return problem;
+    }
+
     async getProblemById(id: string) {
-        const [problem] = await db.select({
-            id: problems.id,
-            title: problems.title,
-            difficulty: problems.difficulty,
-            description: problems.description,
-            examples: problems.examples,
-            constraints: problems.constraints,
-            baseCode: problems.baseCode,
-            createdAt: problems.createdAt,
-            testCases: problems.testCases,
-        })
+        const [problem] = await db.select()
             .from(problems)
             .where(eq(problems.id, id))
             .limit(1);
@@ -67,20 +83,10 @@ export class ProblemsService {
 
     async getRandomProblem(difficulty?: string) {
         const whereClause = difficulty
-            ? eq(problems.difficulty, difficulty as any)
+            ? eq(problems.difficulty, difficulty.toUpperCase())
             : undefined;
 
-        // Optimized: Use ORDER BY RANDOM() for PostgreSQL
-        const [problem] = await db.select({
-            id: problems.id,
-            title: problems.title,
-            difficulty: problems.difficulty,
-            description: problems.description,
-            examples: problems.examples,
-            constraints: problems.constraints,
-            baseCode: problems.baseCode,
-            createdAt: problems.createdAt,
-        })
+        const [problem] = await db.select()
             .from(problems)
             .where(whereClause)
             .orderBy(sql`RANDOM()`)

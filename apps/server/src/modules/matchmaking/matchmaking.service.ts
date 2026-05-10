@@ -1,28 +1,19 @@
 import { redis } from '../../lib/redis';
 import { logger } from '../../lib/logger';
-import { db } from '../../db';
-import { matches } from '@arena/database';
+import { db } from '../db';
+import { matchRooms } from '@arena/database';
 import crypto from 'crypto';
 import { Server } from 'socket.io';
 import { problemsService } from '../problems/problems.service';
 import { matchmakingQueue, type MatchPair } from '../../lib/matchmaking-queue';
+import { matchesService } from '../matches/matches.service';
 
-/**
- * MatchmakingService — Orchestrates matchmaking using the Redis-backed MatchmakingQueue.
- *
- * The MatchmakingQueue handles the sorted set operations and background polling.
- * This service wires match creation logic into the queue's onMatch callback.
- */
 export class MatchmakingService {
-    private readonly MATCH_TTL = 3600; // 1 hour
-
     constructor(private io: Server) {
-        // Register the match creation callback on the background polling loop
         matchmakingQueue.onMatch((pair: MatchPair) => {
             this.createMatch(pair.player1Id, pair.player2Id);
         });
 
-        // Start the background polling loop (500ms interval)
         matchmakingQueue.startPolling();
         logger.info('[MATCHMAKING] Service initialized with background polling');
     }
@@ -33,54 +24,50 @@ export class MatchmakingService {
     }
 
     private async createMatch(player1Id: string, player2Id: string) {
-        const matchId = crypto.randomUUID();
-
         try {
-            // Select a random problem using the optimized service method
-            const problem = await problemsService.getRandomProblem();
+            // Create a 1v1 ranked room in 'waiting' status
+            const room = await matchesService.createMatchRoom({
+                mode: 'ranked',
+                player1Id,
+            });
 
-            if (!problem) {
-                throw new Error('No problems available for match');
+            // Join player 2
+            await matchesService.joinMatchRoom(room.roomCode, player2Id);
+
+            const fullRoom = await matchesService.getMatchById(room.id);
+
+            logger.info({ roomId: room.id, player1Id, player2Id }, '[MATCHMAKING] Match room created for pair');
+
+            // Notify both players to join the waiting room
+            // Emit as per requirements: room:player_joined -> {player2: {username, tier, rating}}
+            // But for matchmaking both are joined at once.
+            
+            if (!fullRoom || !fullRoom.player1 || !fullRoom.player2) {
+                throw new Error('Match intel corrupted');
             }
 
-            // Create record in DB — timestamps are now Date objects for PostgreSQL
-            await db.insert(matches).values({
-                id: matchId,
-                player1Id,
-                player2Id,
-                problemId: problem.id,
-                status: 'active',
-                startedAt: new Date(),
-            });
-
-            // Store active match state in Redis for fast access
-            await redis.setex(`match:${matchId}`, this.MATCH_TTL, JSON.stringify({
-                id: matchId,
-                player1Id,
-                player2Id,
-                problemId: problem.id,
-                status: 'active'
-            }));
-
-            logger.info({ matchId, player1Id, player2Id }, '[MATCHMAKING] Match created');
-
-            // Notify player 1
             this.io.to(`user:${player1Id}`).emit('MATCH_FOUND', {
-                matchId,
-                problem,
-                opponentId: player2Id
+                roomCode: room.roomCode,
+                roomId: room.id,
+                players: [
+                    { id: fullRoom.player1.id, username: fullRoom.player1.username, tier: fullRoom.player1.tier, rating: fullRoom.player1.rankRating },
+                    { id: fullRoom.player2.id, username: fullRoom.player2.username, tier: fullRoom.player2.tier, rating: fullRoom.player2.rankRating }
+                ],
+                problem: fullRoom.problem
             });
 
-            // Notify player 2
             this.io.to(`user:${player2Id}`).emit('MATCH_FOUND', {
-                matchId,
-                problem,
-                opponentId: player1Id
+                roomCode: room.roomCode,
+                roomId: room.id,
+                players: [
+                    { id: fullRoom.player1.id, username: fullRoom.player1.username, tier: fullRoom.player1.tier, rating: fullRoom.player1.rankRating },
+                    { id: fullRoom.player2.id, username: fullRoom.player2.username, tier: fullRoom.player2.tier, rating: fullRoom.player2.rankRating }
+                ],
+                problem: fullRoom.problem
             });
 
         } catch (err) {
             logger.error({ err }, '[MATCHMAKING] Failed to create match');
-            // Re-queue users if match creation fails (preserve their Elo)
             await matchmakingQueue.addToQueue(player1Id, 1200);
             await matchmakingQueue.addToQueue(player2Id, 1200);
         }
@@ -90,9 +77,6 @@ export class MatchmakingService {
         await matchmakingQueue.removeFromQueue(userId);
     }
 
-    /**
-     * Get current queue depth (useful for metrics/admin dashboard).
-     */
     async getQueueSize(): Promise<number> {
         return matchmakingQueue.getQueueSize();
     }

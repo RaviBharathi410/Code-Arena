@@ -37,6 +37,9 @@ export const ProblemsList: React.FC = () => {
                 if (difficultyFilter !== 'all') {
                     query.append('difficulty', difficultyFilter);
                 }
+                if (searchQuery) {
+                    query.append('search', searchQuery);
+                }
                 const res = await api.get(`/problems?${query.toString()}`);
                 const newData = res.data.data || [];
                 
@@ -53,8 +56,13 @@ export const ProblemsList: React.FC = () => {
                 setLoading(false);
             }
         };
-        fetchProblems();
-    }, [page, difficultyFilter]);
+
+        const timeoutId = setTimeout(() => {
+            fetchProblems();
+        }, 300); // Debounce search
+
+        return () => clearTimeout(timeoutId);
+    }, [page, difficultyFilter, searchQuery]);
 
     // Intersection Observer for Infinite Scroll
     useEffect(() => {
@@ -77,7 +85,7 @@ export const ProblemsList: React.FC = () => {
     useEffect(() => {
         setPage(0);
         setProblems([]);
-    }, [difficultyFilter]);
+    }, [difficultyFilter, searchQuery]);
 
     useEffect(() => {
         if (!loading && problems.length > 0) {
@@ -97,9 +105,7 @@ export const ProblemsList: React.FC = () => {
         }
     };
 
-    const filteredProblems = problems.filter(p => 
-        p.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const displayProblems = problems;
 
     return (
         <div ref={containerRef} className={`h-screen w-full flex flex-col relative overflow-hidden transition-colors duration-500 ${isLight ? 'bg-gray-50 text-black' : 'bg-[#050507] text-white'}`}>
@@ -188,7 +194,7 @@ export const ProblemsList: React.FC = () => {
                             <div className={`w-12 h-12 border-2 rounded-full animate-spin mb-4 ${isLight ? 'border-black/20 border-t-black' : 'border-white/20 border-t-white'}`} />
                             <p className="text-[10px] font-black uppercase tracking-[0.4em]">Establishing Neural Uplink...</p>
                         </div>
-                    ) : filteredProblems.length === 0 && !loading ? (
+                    ) : displayProblems.length === 0 && !loading ? (
                         <div className={`h-full flex flex-col items-center justify-center text-center opacity-20 py-20 border border-dashed rounded-[3rem] ${isLight ? 'border-black/20' : 'border-white/10'}`}>
                             <Target size={48} className="mb-6" />
                             <p className="text-xl font-black uppercase tracking-tighter">No modules matching signature</p>
@@ -196,7 +202,7 @@ export const ProblemsList: React.FC = () => {
                         </div>
                     ) : (
                         <div className="flex flex-col gap-4 pb-12">
-                            {filteredProblems.map((prob) => (
+                            {displayProblems.map((prob) => (
                                 <GlassCard key={prob.id} className={`problem-card group hover:border-accent-secondary/50 transition-all p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#12121a] border-white/10 hover:bg-[#1a1a24] hover:border-white/40 shadow-xl'}`}>
                                     <div className="flex-1 flex flex-col md:flex-row items-center gap-8 relative z-10 w-full">
                                         <div className="flex flex-col items-center md:items-start min-w-[200px]">

@@ -5,6 +5,7 @@ import { users } from '@arena/database';
 import { eq } from 'drizzle-orm';
 import { leaderboard } from '../lib/leaderboard';
 import { logger } from '../lib/logger';
+import { createBullMQRedisClient } from '../lib/redis';
 
 // ── Queue Definition ───────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ export interface EloJobData {
 }
 
 export const eloQueue = new Queue<EloJobData>('elo-recalculation', {
-    connection: bullmqConnection,
+    connection: createBullMQRedisClient(),
     defaultJobOptions: {
         attempts: 3,
         backoff: {
@@ -146,7 +147,7 @@ export const eloWorker = new Worker<EloJobData>(
         return { newWinnerElo, newLoserElo, winnerGain, loserLoss };
     },
     {
-        connection: bullmqConnection,
+        connection: createBullMQRedisClient(),
         concurrency: 5,
     }
 );

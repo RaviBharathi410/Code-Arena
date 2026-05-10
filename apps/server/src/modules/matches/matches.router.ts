@@ -4,10 +4,9 @@ import { requireAuth } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-router.get('/', requireAuth, matchesController.getUserMatches);
-router.get('/recent', requireAuth, matchesController.getRecentMatches);
-router.get('/user/:userId', requireAuth, matchesController.getMatchesByUserId);
-router.get('/:id', requireAuth, matchesController.getMatchById);
-router.post('/:id/forfeit', requireAuth, matchesController.forfeit);
+router.post('/create', requireAuth, matchesController.create);
+router.post('/join', requireAuth, matchesController.join);
+router.get('/my', requireAuth, matchesController.getMyMatches);
+router.get('/:id', requireAuth, matchesController.getById);
 
 export default router;

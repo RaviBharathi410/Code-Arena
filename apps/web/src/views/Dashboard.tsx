@@ -6,7 +6,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useSocket } from '../contexts/SocketContext';
 import { TournamentHub } from './TournamentHub';
 import { useLayout } from '../components/layout/MainLayout';
-import { User, LeaderboardEntry, Match } from '../types';
+import { User, LeaderboardEntry, MatchRoom } from '../types';
+import { useMatch } from '../contexts/MatchContext';
 import api from '../lib/api';
 import { SettingsView } from './SettingsView';
 
@@ -15,22 +16,17 @@ import {
     Sword, Target,
     ChevronRight,
     Edit2, Moon, Sun,
-    Play, Menu, X, Search,
-    Bell, Mail, Sparkles, Shield, Cpu,
-    Award, TrendingUp
+    Menu, X,
+    Bell, Sparkles, Shield, Cpu,
+    Award, TrendingUp, Plus, Users
 } from 'lucide-react';
 import { Logo } from '../components/ui/Logo';
 
 // ── Leaderboard data ──────────────────────────────────────────────────────
-const INITIAL_LEADERBOARD = [
-    { rank: 1, userId: 'm1', username: 'Ghost_Runner_32', rating: 4820, wins: 312, losses: 80, badge: '⚡' },
-    { rank: 2, userId: 'm2', username: 'NeonShadow_X', rating: 4611, wins: 289, losses: 95, badge: '🔥' },
-    { rank: 3, userId: 'm3', username: 'CipherKnight', rating: 4430, wins: 261, losses: 105, badge: '💎' },
-    { rank: 4, userId: 'm4', username: 'VoidPulse_9', rating: 4205, wins: 238, losses: 112, badge: '🚀' },
-    { rank: 5, userId: 'm5', username: 'QuantumByte', rating: 3980, wins: 215, losses: 115, badge: '🌟' },
-    { rank: 6, userId: 'm6', username: 'SilverAxe_404', rating: 3760, wins: 198, losses: 120, badge: '🏆' },
-    { rank: 7, userId: 'm7', username: 'NullPointer_77', rating: 3540, wins: 179, losses: 125, badge: '⚔️' },
-    { rank: 8, userId: 'm8', username: 'DataPhantom', rating: 3310, wins: 160, losses: 130, badge: '🎯' },
+const INITIAL_LEADERBOARD: LeaderboardEntry[] = [
+    { rank: 1, userId: 'm1', username: 'Ghost_Runner_32', rankRating: 4820, wins: 312, winRate: 80, tier: 'OPERATOR' },
+    { rank: 2, userId: 'm2', username: 'NeonShadow_X', rankRating: 4611, wins: 289, winRate: 75, tier: 'DIAMOND' },
+    { rank: 3, userId: 'm3', username: 'CipherKnight', rankRating: 4430, wins: 261, winRate: 70, tier: 'PLATINUM' },
 ];
 
 // ── Radar Chart Component ─────────────────────────────────────────────────
@@ -103,15 +99,22 @@ type Tab = 'command' | 'battle' | 'practice' | 'tournaments' | 'history' | 'lead
 // ── Main Dashboard ────────────────────────────────────────────────────────
 export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     const { fetchProblems, fetchTournaments } = useArenaStore();
-    const { currentPage, goToBattle, goToOpponents, goToArenaSolo, goToArenaPractice, goToHistory, goToProfile, goToProblems } = useNav();
+    const { 
+        currentPage, goToBattle, goToOpponents, 
+        goToArenaPractice, goToHistory, goToProblems,
+        goToArenaMatch, params 
+    } = useNav();
     const { isMenuOpen, setIsMenuOpen, isLight, setTheme } = useLayout();
+    const { createRoom, joinRoom } = useMatch();
 
     const { updateRating, updateStats } = useAuthStore();
-    const { on } = useSocket();
+    const { on, emit } = useSocket();
 
     const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
-    const [recentMatchesData, setRecentMatchesData] = useState<Match[]>([]);
+    const [recentMatchesData, setRecentMatchesData] = useState<MatchRoom[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isMatchmaking, setIsMatchmaking] = useState(false);
+    const [matchmakingTime, setMatchmakingTime] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [ratingFlash, setRatingFlash] = useState<{ change: number; newRating: number } | null>(null);
 
@@ -132,38 +135,77 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     };
 
     const [activeTab, setActiveTab] = useState<Tab>(PAGE_TO_TAB[currentPage] || 'command');
-    const [searchQuery, setSearchQuery] = useState('');
     const [showNots, setShowNots] = useState(false);
-    const [showMail, setShowMail] = useState(false);
     const [isEditingProfile, setIsEditingProfile] = useState(false);
-
     const [notifications, setNotifications] = useState([
         { id: 1, text: 'New Tournament starting soon!', time: '5m ago' },
         { id: 2, text: 'Rank up! You are now Silver IV', time: '1h ago' }
     ]);
 
-    const [messages] = useState([
-        { id: 1, from: 'System', text: 'Welcome to CodeArena v2.4. Uplink established.', time: 'Just Now', unread: true },
-        { id: 2, from: 'Ghost_Runner_32', text: 'GG! Your algorithm was lethal. Rematch?', time: '2h ago', unread: true },
-    ]);
+    const [displayedUser, setDisplayedUser] = useState<User>(currentUser);
+    const [profileLoading, setProfileLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchTargetProfile = async () => {
+            if (activeTab === 'profile' && params.userId && params.userId !== currentUser.id) {
+                setProfileLoading(true);
+                try {
+                    const res = await api.get(`/users/${params.userId}`);
+                    setDisplayedUser(res.data);
+                } catch (err) {
+                    console.error('Failed to fetch profile:', err);
+                    setDisplayedUser(currentUser);
+                } finally {
+                    setProfileLoading(false);
+                }
+            } else {
+                setDisplayedUser(currentUser);
+            }
+        };
+
+        fetchTargetProfile();
+    }, [activeTab, params.userId, currentUser]);
 
     useEffect(() => {
         setActiveTab(PAGE_TO_TAB[currentPage] || 'command');
     }, [currentPage]);
 
-    // Close notification/mail dropdowns on outside click
+    // Close notification dropdowns on outside click
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
                 setShowNots(false);
             }
-            if (mailRef.current && !mailRef.current.contains(e.target as Node)) {
-                setShowMail(false);
-            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        let interval: any;
+        if (isMatchmaking) {
+            interval = setInterval(() => setMatchmakingTime(t => t + 1), 1000);
+        } else {
+            setMatchmakingTime(0);
+        }
+        return () => clearInterval(interval);
+    }, [isMatchmaking]);
+
+    const startMatchmaking = () => {
+        setIsMatchmaking(true);
+        // Socket emit join queue
+        emit('find_match', {});
+        on('MATCH_FOUND', (data: any) => {
+            setIsMatchmaking(false);
+            goToArenaMatch(data.matchId || data.roomId || data.roomCode);
+        });
+    };
+
+    const cancelMatchmaking = () => {
+        setIsMatchmaking(false);
+        // Socket emit leave queue
+        emit('cancel_search', {});
+    };
 
     const fetchDashboardData = useCallback(async () => {
         setIsLoading(true);
@@ -239,10 +281,8 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
     const sortedLeaderboard = useMemo(() => {
         const data = leaderboardData.length > 0 ? leaderboardData : INITIAL_LEADERBOARD;
-        let results = [...data].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        if (searchQuery) results = results.filter(e => (e.username || '').toLowerCase().includes(searchQuery.toLowerCase()));
-        return results;
-    }, [leaderboardData, searchQuery]);
+        return [...data].sort((a, b) => (b.rankRating || 0) - (a.rankRating || 0));
+    }, [leaderboardData]);
 
     // ── Panel Components ──────────────────────────────────────────────────
     const CommandPanel = () => (
@@ -272,7 +312,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6 w-full max-w-6xl">
                 {[
-                    { icon: <Trophy size={20} />, val: currentUser.rating ?? 1200, label: 'Rank Rating', highlight: ratingFlash && 'rating' },
+                    { icon: <Trophy size={20} />, val: currentUser.rankRating ?? 1200, label: 'Rank Rating', highlight: ratingFlash && 'rating' },
                     { icon: <Target size={20} />, val: currentUser.wins && currentUser.losses
                         ? `${Math.round((currentUser.wins / ((currentUser.wins || 0) + (currentUser.losses || 0))) * 100)}%`
                         : '—', label: 'Win Rate' },
@@ -309,7 +349,9 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[
                     { title: 'Ranked Dual', desc: 'Climb the global leaderboard in 1v1 combat.', icon: <Sword size={28} />, badge: 'STAKES', action: () => goToProblems() },
-                    { title: 'Quick Match', desc: 'Jump into a casual speed-coding session instantly.', icon: <Zap size={28} />, badge: 'FAST', action: () => goToProblems() },
+                    { title: 'Quick Match', desc: 'Jump into a casual speed-coding session instantly.', icon: <Zap size={28} />, badge: 'FAST', action: startMatchmaking },
+                    { title: 'Create Room', desc: 'Generate a private 6-char code to challenge a friend.', icon: <Plus size={28} />, badge: 'PRIVATE', action: async () => { await createRoom('1v1'); goToArenaMatch('new'); } },
+                    { title: 'Join Room', desc: 'Enter a 6-character room code to join an existing uplink.', icon: <Users size={28} />, badge: 'UPLINK', action: () => { const code = prompt('Enter 6-char Room Code:'); if(code) { joinRoom(code); goToArenaMatch('new'); } } },
                 ].map((mode, i) => (
                     <button key={i} onClick={mode.action}
                         className={`group p-8 rounded-3xl border transition-all duration-300 text-left relative overflow-hidden ${isLight ? 'bg-black/5 border-black/10 hover:bg-black/10' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
@@ -421,7 +463,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 <span className="font-black opacity-20 text-2xl w-8">#{i + 1}</span>
                                 <span className="font-bold">{u.username}</span>
                             </div>
-                            <span className="font-black text-accent-secondary">{u.rating} RP</span>
+                            <span className="font-black text-accent-secondary">{u.rankRating} RP</span>
                         </div>
                     ))}
                 </div>
@@ -442,151 +484,140 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Left Col: Core Stats & Avatar */}
-                    <div className="lg:col-span-4 space-y-8">
-                        <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden ${isLight ? 'bg-black text-white shadow-2xl' : 'bg-white text-black shadow-white/5 shadow-2xl skew-y-1'}`}>
-                            <div className="relative group cursor-pointer mb-8">
-                                <div className={`w-32 h-32 rounded-[2.5rem] bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center font-black text-5xl transition-transform group-hover:scale-105 duration-500`}>
-                                    {currentUser.username?.[0].toUpperCase()}
-                                </div>
-                                {isEditingProfile && (
-                                    <div className="absolute inset-0 bg-black/40 rounded-[2.5rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Edit2 size={24} className="text-white" />
-                                    </div>
-                                )}
-                            </div>
-                            <div className="text-center space-y-2">
-                                <h3 className="text-3xl font-black tracking-tighter uppercase">{currentUser.username}</h3>
-                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-40">Active Instance // US-EAST-1</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 w-full mt-10">
-                                <div className="text-center p-4 border border-current rounded-2xl opacity-40">
-                                    <p className="text-2xl font-black tracking-tighter">{currentUser.rating}</p>
-                                    <p className="text-[8px] font-black uppercase tracking-widest mt-1">Global RP</p>
-                                </div>
-                                <div className="text-center p-4 border border-current rounded-2xl opacity-40">
-                                    <p className="text-2xl font-black tracking-tighter">Gold II</p>
-                                    <p className="text-[8px] font-black uppercase tracking-widest mt-1">Tier Class</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Recent Performance Snapshot */}
-                        <div className={`p-8 rounded-[2.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 border-b border-current pb-4">Performance Vectors</h4>
-                            <div className="mt-4">
-                                <SkillRadar isLight={isLight} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 mt-8">
-                                <div className="p-4 rounded-2xl bg-black/5 text-center">
-                                    <p className="text-xl font-black uppercase">94%</p>
-                                    <p className="text-[8px] font-black opacity-30">Accuracy</p>
-                                </div>
-                                <div className="p-4 rounded-2xl bg-black/5 text-center">
-                                    <p className="text-xl font-black uppercase">4.2s</p>
-                                    <p className="text-[8px] font-black opacity-30">Avg Load</p>
-                                </div>
-                            </div>
-                        </div>
+                {profileLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <div className="w-8 h-8 border-2 border-accent-secondary border-t-transparent animate-spin rounded-full" />
                     </div>
-
-                    {/* Right Col: Details / History / Achievements */}
-                    <div className="lg:col-span-8 space-y-8">
-                        {/* Summary & Achievements */}
-                        <div id="achievements" className={`p-10 rounded-[3.5rem] border relative overflow-hidden ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-10">Milestone achievements</h4>
-                            <div className="flex flex-wrap gap-4">
-                                {[
-                                    { icon: <Zap size={20} />, label: 'Blitz Master', color: 'bg-yellow-500/20 text-yellow-500' },
-                                    { icon: <Award size={20} />, label: 'Algorithm Elite', color: 'bg-accent-secondary/15 text-accent-secondary' },
-                                    { icon: <Shield size={20} />, label: 'Bug Crusher', color: 'bg-green-500/20 text-green-500' },
-                                    { icon: <TrendingUp size={20} />, label: 'Top 1% Growth', color: 'bg-purple-500/20 text-purple-500' },
-                                    { icon: <Trophy size={20} />, label: 'Season III Champ', color: 'bg-blue-500/20 text-blue-500' },
-                                ].map((badge, i) => (
-                                    <div key={i} className={`group relative p-4 rounded-3xl border border-current w-32 h-32 flex flex-col items-center justify-center gap-2 transition-all hover:scale-105 cursor-help ${badge.color}`}>
-                                        {badge.icon}
-                                        <p className="text-[9px] font-black uppercase text-center tracking-tighter leading-tight">{badge.label}</p>
-                                        <div className="absolute inset-0 bg-current opacity-0 group-hover:opacity-5 rounded-3xl transition-opacity" />
+                ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* Left Col: Core Stats & Avatar */}
+                        <div className="lg:col-span-4 space-y-8">
+                            <div className={`p-10 rounded-[3rem] border flex flex-col items-center relative overflow-hidden transition-all duration-700 ${isLight ? 'bg-white border-black/10 shadow-2xl' : 'bg-white text-black shadow-[0_40px_100px_rgba(255,255,255,0.1)]'}`}>
+                                <div className="relative group cursor-pointer mb-8">
+                                    <div className={`w-32 h-32 rounded-[2.5rem] bg-accent-secondary flex items-center justify-center font-black text-5xl transition-transform group-hover:scale-105 duration-500 text-black shadow-2xl shadow-accent-secondary/20`}>
+                                        {displayedUser.username?.[0].toUpperCase()}
                                     </div>
-                                ))}
-                                <div className="p-4 rounded-3xl border border-dashed border-gray-500 w-32 h-32 flex items-center justify-center opacity-30">
-                                    <span className="text-[8px] font-black text-center">+12 More Locked</span>
+                                    {isEditingProfile && displayedUser.id === currentUser.id && (
+                                        <div className="absolute inset-0 bg-black/40 rounded-[2.5rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Edit2 size={24} className="text-white" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-center space-y-2">
+                                    <h3 className="text-3xl font-black tracking-tighter uppercase text-black">{displayedUser.username}</h3>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-40 text-black">Active Instance // US-EAST-1</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 w-full mt-10">
+                                    <div className="text-center p-6 border border-black/10 rounded-3xl bg-black/5 text-black">
+                                        <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-1">Global RP</p>
+                                        <p className="text-2xl font-black tracking-tighter">{displayedUser.rankRating}</p>
+                                    </div>
+                                    <div className="text-center p-6 border border-black/10 rounded-3xl bg-black/5 text-black">
+                                        <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-1">Tier Class</p>
+                                        <p className="text-2xl font-black tracking-tighter">{displayedUser.tier || 'Gold II'}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Performance Radar in Sidebar for users */}
+                            <div className={`p-8 rounded-[2.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 border-b border-current pb-4">Neural Performance</h4>
+                                <div className="mt-4">
+                                    <SkillRadar isLight={isLight} />
                                 </div>
                             </div>
                         </div>
 
-                        {/* Recent Battle History (Scores) */}
-                        <div id="logs" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 flex justify-between">
-                                <span>Recent combat logs</span>
-                                <span className="opacity-40">Uplink Stable</span>
-                            </h4>
-                            <div className="space-y-4">
-                                {recentMatchesData.length === 0 && !isLoading && (
-                                    <p className="text-xs opacity-40">No recent combat logs found in this sector.</p>
-                                )}
-                                {recentMatchesData.map((log) => (
-                                    <div key={log.id} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all border border-transparent ${isLight ? 'hover:bg-black/5 hover:border-black/5' : 'hover:bg-white/5 hover:border-white/10'}`}>
-                                        <div className="flex items-center gap-6">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${log.status === 'completed' ? (isLight ? 'bg-green-500/10 text-green-600' : 'bg-green-500/20 text-green-500') : (isLight ? 'bg-yellow-500/10 text-yellow-600' : 'bg-yellow-500/20 text-yellow-500')}`}>
-                                                {log.player2Id === currentUser.id ? 'VS' : 'OP'}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`text-lg font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Match #{log.id.slice(0, 8)}</span>
-                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${isLight ? 'bg-black/5 opacity-60' : 'bg-white/10 opacity-50'}`}>{log.status}</span>
-                                                </div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mt-1">Status: {log.status} // {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'Active'}</p>
-                                            </div>
+                        {/* Right Col: Achievements & History */}
+                        <div className="lg:col-span-8 space-y-8">
+                            <div id="achievements" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-white border-black/10 shadow-sm' : 'bg-white/5 border-white/10'}`}>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-10">Milestone Achievements</h4>
+                                <div className="flex flex-wrap gap-4">
+                                    {[
+                                        { name: 'Blitz Master', icon: <Zap size={18} />, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
+                                        { name: 'Algorithm Elite', icon: <Award size={18} />, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/20' },
+                                        { name: 'Bug Crusher', icon: <Shield size={18} />, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
+                                        { name: 'Top 1% Growth', icon: <TrendingUp size={18} />, color: 'text-fuchsia-400', bg: 'bg-fuchsia-400/10', border: 'border-fuchsia-400/20' },
+                                        { name: 'Season III Champ', icon: <Trophy size={18} />, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
+                                    ].map((a, i) => (
+                                        <div key={i} className={`p-6 rounded-[2rem] border ${a.bg} ${a.border} group relative transition-all hover:scale-105 w-32 h-32 flex flex-col items-center justify-center text-center gap-3`}>
+                                            <div className={a.color}>{a.icon}</div>
+                                            <span className={`text-[8px] font-black uppercase tracking-widest ${a.color}`}>{a.name}</span>
+                                            <div className="absolute inset-0 bg-current opacity-0 group-hover:opacity-5 rounded-3xl transition-opacity" />
+                                        </div>
+                                    ))}
+                                    <div className="p-4 rounded-[2rem] border border-dashed border-gray-500/30 w-32 h-32 flex items-center justify-center opacity-30">
+                                        <span className="text-[8px] font-black text-center">+12 More Locked</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Account Config (Editing Area) */}
+                            <div id="config" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-black text-white' : 'bg-white/5 border-white/10'}`}>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-10">Neural Interface configuration</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-6">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator ID</label>
+                                            {isEditingProfile && displayedUser.id === currentUser.id ? (
+                                                <input type="text" defaultValue={displayedUser.username} className={`w-full border rounded-xl p-4 text-xs font-black focus:border-accent-secondary outline-none ${isLight ? 'bg-black/5 border-black/10 text-black' : 'bg-white/5 border-white/20 text-white'}`} />
+                                            ) : (
+                                                <p className={`text-lg font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{displayedUser.username || 'GUEST_OPERATOR'}</p>
+                                            )}
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Uplink Email</label>
+                                            {isEditingProfile && displayedUser.id === currentUser.id ? (
+                                                <input type="email" defaultValue={displayedUser.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black focus:border-accent-secondary outline-none" />
+                                            ) : (
+                                                <p className={`text-lg font-black tracking-tighter truncate ${isLight ? 'text-black' : 'text-white'}`}>{displayedUser.email || 'N/A'}</p>
+                                            )}
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                            <button
-                                onClick={() => { setActiveTab('history'); goToHistory(); }}
-                                className="w-full mt-10 py-5 rounded-[2rem] border border-dashed border-gray-500/30 text-[9px] font-black uppercase tracking-[0.3em] opacity-40 hover:opacity-100 hover:border-gray-500 transition-all font-black"
-                            >
-                                View Full Combat Archive
-                            </button>
-                        </div>
-
-                        {/* Account Config (Editing Area) */}
-                        <div id="config" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-black text-white' : 'bg-white/5 border-white/10'}`}>
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-10">Neural Interface configuration</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-6">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator ID</label>
-                                        {isEditingProfile ? (
-                                            <input type="text" defaultValue={currentUser.username} className={`w-full border rounded-xl p-4 text-xs font-black focus:border-accent-secondary outline-none ${isLight ? 'bg-black/5 border-black/10 text-black' : 'bg-white/5 border-white/20 text-white'}`} />
-                                        ) : (
-                                            <p className={`text-lg font-black tracking-tighter ${isLight ? 'text-white' : ''}`}>{currentUser.username || 'GUEST_OPERATOR'}</p>
-                                        )}
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Uplink Email</label>
-                                        {isEditingProfile ? (
-                                            <input type="email" defaultValue={currentUser.email} className="w-full bg-white/5 border border-white/20 rounded-xl p-4 text-xs font-black focus:border-accent-secondary outline-none" />
-                                        ) : (
-                                            <p className="text-lg font-black tracking-tighter truncate">{currentUser.email || 'N/A'}</p>
-                                        )}
+                                    <div className="space-y-6">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator Bio // System Motto</label>
+                                            {isEditingProfile ? (
+                                                <textarea rows={3} className="w-full bg-white/5 border border-white/20 rounded-2xl p-4 text-xs font-black focus:border-accent-secondary outline-none resize-none" defaultValue="Evolved logic. Absolute precision. The void awaits." />
+                                            ) : (
+                                                <p className="text-xs font-light tracking-wide leading-relaxed opacity-80">"Evolved logic. Absolute precision. The void awaits."</p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="space-y-6">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Operator Bio // System Motto</label>
-                                        {isEditingProfile ? (
-                                            <textarea rows={3} className="w-full bg-white/5 border border-white/20 rounded-2xl p-4 text-xs font-black focus:border-accent-secondary outline-none resize-none" defaultValue="Evolved logic. Absolute precision. The void awaits." />
-                                        ) : (
-                                            <p className="text-xs font-light tracking-wide leading-relaxed opacity-80">"Evolved logic. Absolute precision. The void awaits."</p>
-                                        )}
-                                    </div>
+                            </div>
+
+                            {/* Recent Battle History (Scores) */}
+                            <div id="logs" className={`p-10 rounded-[3.5rem] border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-8 flex justify-between">
+                                    <span>Recent combat logs</span>
+                                    <span className="opacity-40">Uplink Stable</span>
+                                </h4>
+                                <div className="space-y-4">
+                                    {recentMatchesData.length === 0 && !isLoading && (
+                                        <p className="text-xs opacity-40">No recent combat logs found in this sector.</p>
+                                    )}
+                                    {recentMatchesData.map((log) => (
+                                        <div key={log.id} className={`p-6 rounded-[2rem] flex items-center justify-between group transition-all border border-transparent ${isLight ? 'hover:bg-black/5 hover:border-black/5' : 'hover:bg-white/5 hover:border-white/10'}`}>
+                                            <div className="flex items-center gap-6">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${log.status === 'completed' ? (isLight ? 'bg-green-500/10 text-green-600' : 'bg-green-500/20 text-green-500') : (isLight ? 'bg-yellow-500/10 text-yellow-600' : 'bg-yellow-500/20 text-yellow-500')}`}>
+                                                    {log.player2Id === displayedUser.id ? 'VS' : 'OP'}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`text-lg font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Match #{log.id.slice(0, 8)}</span>
+                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${isLight ? 'bg-black/5 opacity-60' : 'bg-white/10 opacity-50'}`}>{log.status}</span>
+                                                    </div>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mt-1">Status: {log.status} // {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'Active'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         ),
         settings: (
@@ -598,6 +629,42 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
     return (
         <div className={`relative min-h-screen w-full transition-colors duration-500 flex flex-col items-center ${isLight ? 'bg-gray-50 text-black' : 'bg-transparent text-white'}`} ref={containerRef}>
+            {isMatchmaking && (
+                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6">
+                    <div className="max-w-md w-full space-y-12 text-center relative">
+                        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-80 h-80 bg-accent-secondary/20 blur-[120px] rounded-full animate-pulse" />
+                        
+                        <div className="space-y-4 relative z-10">
+                            <h2 className="text-5xl font-black tracking-tighter uppercase italic">Searching...</h2>
+                            <p className="text-xs font-black uppercase tracking-[0.4em] text-gray-500">Scanning global sectors for active rivals</p>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-8 relative z-10">
+                            <div className="relative">
+                                <div className="w-32 h-32 rounded-full border-2 border-white/5 flex items-center justify-center">
+                                    <div className="w-24 h-24 rounded-full border-2 border-accent-secondary/30 border-t-accent-secondary animate-spin" />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center text-accent-secondary">
+                                    <Zap size={32} fill="currentColor" className="animate-pulse" />
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-1">
+                                <p className="text-4xl font-black font-mono tracking-tighter">00:{matchmakingTime.toString().padStart(2, '0')}</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">Elapsed Tactical Time</p>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={cancelMatchmaking}
+                            className="relative z-10 w-full py-5 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-[0.3em] transition-all"
+                        >
+                            Abort Uplink
+                        </button>
+                    </div>
+                </div>
+            )}
+            
             <div className="w-full relative z-10 flex flex-col items-center">
                 <div className="w-full px-6 md:px-12 pt-[42px] pb-8 border-b border-white/5 backdrop-blur-sm sticky top-0 z-[60]">
                     <header className="flex flex-col items-start relative z-50 gap-8 max-w-7xl mx-auto w-full">
@@ -621,7 +688,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                                 </button>
 
                                 <div className="relative" ref={notifRef}>
-                                    <button onClick={() => { setShowNots(!showNots); setShowMail(false); }} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
+                                    <button onClick={() => { setShowNots(!showNots); }} className={`p-3.5 rounded-2xl border transition-all relative ${isLight ? 'bg-white border-black/10 hover:bg-black/5' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}>
                                         <Bell size={20} />
                                         <span className="absolute top-3 right-3 w-4 h-4 bg-red-500 border-2 border-black rounded-full text-[8px] font-black flex items-center justify-center">2</span>
                                     </button>

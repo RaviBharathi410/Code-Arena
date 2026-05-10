@@ -134,14 +134,33 @@ export const GameSpace: React.FC = () => {
     const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
     const SUPPORTED_LANGUAGES = [
-        { id: 'javascript', name: 'JS', icon: 'JS' },
-        { id: 'python', name: 'PY', icon: 'PY' },
-        { id: 'java', name: 'JV', icon: 'JV' },
-        { id: 'cpp', name: 'C++', icon: 'C++' },
+        { id: 'javascript', name: 'JS', icon: 'JS', backendId: 'js' },
+        { id: 'python', name: 'PY', icon: 'PY', backendId: 'py' },
+        { id: 'java', name: 'JV', icon: 'JV', backendId: 'java' },
+        { id: 'cpp', name: 'C++', icon: 'C++', backendId: 'cpp' },
     ];
+
+    const getTemplate = (langId: string, problemTitle: string) => {
+        const title = problemTitle.replace(/\s+/g, '');
+        switch (langId) {
+            case 'python':
+                return `class Solution:\n    def solve(self):\n        # Write your code here\n        pass\n`;
+            case 'java':
+                return `public class Solution {\n    public static void main(String[] args) {\n        // Write your code here\n    }\n}\n`;
+            case 'cpp':
+                return `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your code here\n    return 0;\n}\n`;
+            default:
+                return `function solution() {\n    // Write your code here\n}\n`;
+        }
+    };
 
     const timerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Force show problem on load
+    useEffect(() => {
+        setShowProblem(true);
+    }, []);
 
     // Initial State Setup
     useEffect(() => {
@@ -160,8 +179,14 @@ export const GameSpace: React.FC = () => {
             const fetchProblem = async () => {
                 try {
                     setIsAnalyzing(true);
-                    const res = await api.get(`/problems/${problemId}`);
+                    
+                    // If the problemId is actually a practice mode, fetch a random problem instead
+                    const isSpecialMode = ['speed', 'focus', 'adaptive', 'coach'].includes(problemId);
+                    const url = isSpecialMode ? `/problems/random` : `/problems/${problemId}`;
+                    
+                    const res = await api.get(url);
                     const prob = res.data;
+                    
                     if (prob) {
                         const gameProb: GameProblem = {
                             ...prob,
@@ -173,10 +198,10 @@ export const GameSpace: React.FC = () => {
                         };
                         setSelectedProblem(gameProb);
                         setCode(gameProb.initialCode);
+                        setShowProblem(true); // Ensure it's visible when loaded
                     }
                 } catch (err) {
                     console.error('Failed to fetch practice problem', err);
-                    // Fallback to local if possible or keep default
                 } finally {
                     setIsAnalyzing(false);
                 }
@@ -317,21 +342,23 @@ export const GameSpace: React.FC = () => {
 
             const results = analyzeCode(code);
 
-            if (results.complexity !== liveComplexity) {
-                gsap.fromTo('.complexity-badge',
-                    { scale: 1.2, color: '#22c55e' },
-                    { scale: 1, color: '#4b5563', duration: 0.5 }
-                );
-            }
+            setLiveComplexity(prev => {
+                if (prev !== results.complexity) {
+                    gsap.fromTo('.complexity-badge',
+                        { scale: 1.2, color: '#22c55e' },
+                        { scale: 1, color: '#4b5563', duration: 0.5 }
+                    );
+                }
+                return results.complexity;
+            });
 
-            setLiveComplexity(results.complexity);
             setLiveStrategy(results.strategy);
             setConfidence(results.confidence);
             setIsAnalyzing(false);
         }, 1000);
 
         return () => clearTimeout(debounceTimer);
-    }, [code, isRunning, liveComplexity]);
+    }, [code, isRunning]);
 
     useEffect(() => {
         if (isRunning) {
@@ -508,25 +535,26 @@ export const GameSpace: React.FC = () => {
                             onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
                             className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
                         >
-                            <span className="text-[10px] font-black text-accent-secondary uppercase tracking-[0.2em]">
-                                {SUPPORTED_LANGUAGES.find(l => l.id === language)?.name}
-                            </span>
-                            <div className={`w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-gray-500 transition-transform ${showLanguageDropdown ? 'rotate-180' : ''}`} />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white">{language === 'javascript' ? 'JS' : language === 'python' ? 'PY' : language === 'java' ? 'JV' : 'C++'}</span>
+                            <div className={`w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-zinc-500 transition-transform ${showLanguageDropdown ? 'rotate-180' : ''}`} />
                         </button>
 
                         {showLanguageDropdown && (
-                            <div className="absolute top-12 left-0 w-32 bg-[#0a0a0a]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 z-50 shadow-2xl animate-in zoom-in-95 duration-200">
-                                {SUPPORTED_LANGUAGES.map((lang) => (
+                            <div className="absolute top-full mt-2 left-0 w-32 py-2 rounded-2xl bg-black border border-white/10 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200">
+                                {SUPPORTED_LANGUAGES.map(lang => (
                                     <button
                                         key={lang.id}
                                         onClick={() => {
+                                            const oldTemplate = getTemplate(language, selectedProblem.title);
+                                            const isDefault = code.trim() === '' || code.trim() === oldTemplate.trim();
+                                            
                                             setLanguage(lang.id);
+                                            if (isDefault) {
+                                                setCode(getTemplate(lang.id, selectedProblem.title));
+                                            }
                                             setShowLanguageDropdown(false);
                                         }}
-                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${language === lang.id
-                                            ? 'bg-accent-secondary text-white'
-                                            : 'text-gray-500 hover:bg-white/5 hover:text-white'
-                                            }`}
+                                        className={`w-full px-4 py-2 text-left text-xs font-bold hover:bg-white/5 transition-colors ${language === lang.id ? 'text-accent-secondary' : 'text-zinc-400'}`}
                                     >
                                         {lang.name}
                                     </button>
@@ -606,9 +634,12 @@ export const GameSpace: React.FC = () => {
                                 )}
                             </div>
                             <button
-                                onClick={handleSubmit}
-                                disabled={isSubmitting || isComplete}
-                                className="px-6 py-2.5 bg-accent-secondary hover:bg-accent-secondary/90 disabled:bg-gray-700 text-white font-black uppercase tracking-widest text-xs rounded-lg transition-all flex items-center gap-2 shadow-[0_0_22px_rgba(124,58,237,0.22)]"
+                                onClick={() => {
+                                    const selectedLang = SUPPORTED_LANGUAGES.find(l => l.id === language);
+                                    submitCode(code, selectedLang?.backendId || 'js');
+                                    setIsSubmitting(true);
+                                }}
+                                className={`flex items-center gap-2 px-8 py-3 rounded-2xl bg-accent-primary text-black font-black uppercase text-xs tracking-widest transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(124,58,237,0.3)] ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <Zap size={14} />
                                 {isSubmitting ? 'Transmitting...' : 'Execute Uplink'}
@@ -619,26 +650,21 @@ export const GameSpace: React.FC = () => {
             </header>
 
             {/* ── Main Workspace ── */}
-            <main 
-                className="flex-1 grid overflow-hidden bg-[#020202]"
-                style={{ 
-                    gridTemplateColumns: showProblem ? '450px 1fr 384px' : '0px 1fr 384px' 
-                }}
-            >
+            <main className="flex-1 flex overflow-hidden bg-[#020202] relative">
                 {/* ── Left: Problem Description ── */}
                 <aside
-                    className={`border-r border-white/10 flex flex-col bg-[#050505] overflow-hidden transition-all duration-500 ease-in-out ${showProblem ? 'opacity-100' : 'opacity-0'}`}
+                    className={`problem-panel border-r border-white/10 flex flex-col bg-[#080808] overflow-hidden transition-all duration-500 ease-in-out z-20 shrink-0 ${showProblem ? 'w-[450px] opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-full'}`}
                 >
-                    <div className="p-8 overflow-y-auto flex-1 custom-scrollbar w-full">
+                    <div className="p-8 overflow-y-auto flex-1 custom-scrollbar min-w-[450px]">
                         <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-3xl font-black tracking-tighter uppercase text-white">{selectedProblem.title}</h2>
-                            <button onClick={() => setShowProblem(false)} className="p-2 text-gray-500 hover:text-white">
+                            <h2 className="text-3xl font-black tracking-tighter uppercase text-white drop-shadow-sm">{selectedProblem.title}</h2>
+                            <button onClick={() => setShowProblem(false)} className="p-2 text-zinc-500 hover:text-white transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
 
                         <div className="space-y-8">
-                            <p className="text-xl text-gray-200 font-light leading-relaxed">{selectedProblem.description}</p>
+                            <p className="text-xl text-white font-light leading-relaxed">{selectedProblem.description}</p>
 
                             <div className="space-y-6">
                                 {selectedProblem.examples.map((ex, i) => (
@@ -649,11 +675,11 @@ export const GameSpace: React.FC = () => {
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-gray-500 text-[10px] uppercase">Input</p>
-                                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-blue-400">{ex.input}</div>
+                                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-white font-mono">{ex.input}</div>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-gray-500 text-[10px] uppercase">Output</p>
-                                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-green-400">{ex.output}</div>
+                                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-white font-mono">{ex.output}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -661,9 +687,17 @@ export const GameSpace: React.FC = () => {
 
                             <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
                                 <h3 className="text-xs font-black uppercase tracking-widest text-accent-secondary">Constraints</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {Array.isArray(selectedProblem.constraints) && selectedProblem.constraints.map((c, i) => (
-                                        <code key={i} className="px-3 py-1.5 rounded-lg bg-black text-xs font-mono text-gray-300 border border-white/10">{c}</code>
+                                <div className="space-y-4">
+                                    {(Array.isArray(selectedProblem.constraints) 
+                                        ? selectedProblem.constraints 
+                                        : (typeof selectedProblem.constraints === 'string' 
+                                            ? selectedProblem.constraints.split('\n').flatMap(s => s.split(', ')) 
+                                            : [])
+                                    ).map((c, i) => (
+                                        <div key={i} className="flex gap-4 items-center group/c">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-accent-secondary opacity-60 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+                                            <code className="text-white text-sm font-medium font-mono tracking-tight">{c}</code>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -672,7 +706,7 @@ export const GameSpace: React.FC = () => {
                 </aside>
 
                 {/* ── Center: Editor ── */}
-                <section className={`flex flex-col transition-all duration-700 bg-black relative ${!isRunning ? 'blur-sm grayscale opacity-30 pointer-events-none scale-105' : ''}`}>
+                <section className={`editor-container flex-1 flex flex-col transition-all duration-700 bg-black relative min-w-0 ${!isRunning ? 'blur-sm grayscale opacity-30 pointer-events-none scale-[1.02]' : ''}`}>
                     <div className="flex-1 min-h-0 relative">
                         <Editor
                             height="100%"
@@ -715,44 +749,46 @@ export const GameSpace: React.FC = () => {
 
                 {/* ── Right: Analytics & Opponent ── */}
                 <aside 
-                    className="border-l border-white/10 flex flex-col bg-[#050505] overflow-hidden"
+                    className="w-[384px] border-l border-white/10 flex flex-col bg-[#080808] overflow-hidden shrink-0"
                 >
                     {/* Real-time Analytics */}
-                    <div className="p-6 border-b border-white/10 space-y-6">
+                    <div className="p-6 border-b border-white/10 space-y-6 bg-white/[0.02]">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Cpu size={14} className="text-blue-500" />
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Agent Intel</h3>
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Agent Intel</h3>
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <div className={`w-1.5 h-1.5 rounded-full ${isAnalyzing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
-                                <span className="text-[10px] font-mono text-gray-400">
+                                <div className={`w-1.5 h-1.5 rounded-full ${isAnalyzing ? 'bg-yellow-500 animate-pulse shadow-[0_0_8px_rgba(234,179,8,0.5)]' : 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]'}`} />
+                                <span className="text-[10px] font-mono text-zinc-500">
                                     {isAnalyzing ? 'Analyzing...' : 'Standby'}
                                 </span>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1">
-                                <p className="text-[8px] font-black text-gray-600 uppercase">Complexity</p>
+                            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1 hover:bg-white/10 transition-colors">
+                                <p className="text-[8px] font-black text-zinc-500 uppercase">Complexity</p>
                                 <p className="text-sm font-bold text-white complexity-badge">{liveComplexity}</p>
                             </div>
-                            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-1">
-                                <p className="text-[8px] font-black text-gray-600 uppercase">Strategy</p>
+                            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1 hover:bg-white/10 transition-colors">
+                                <p className="text-[8px] font-black text-zinc-500 uppercase">Strategy</p>
                                 <p className="text-sm font-bold text-accent-secondary">{liveStrategy}</p>
                             </div>
                         </div>
 
                         <div className="space-y-3">
-                            <div className="flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-gray-500">
+                            <div className="flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">
                                 <span>Logic Efficiency</span>
-                                <span className="text-white">{confidence}%</span>
+                                <span className="text-white font-bold">{confidence}%</span>
                             </div>
                             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                                 <div className="h-full bg-gradient-to-r from-accent-primary to-accent-secondary transition-all duration-1000" style={{ width: `${confidence}%` }} />
                             </div>
                         </div>
                     </div>
+
+                    <div className="flex-1" /> {/* Spacer for practice mode */}
 
                     {/* Opponent Code Buffer */}
                     {!isPractice && (

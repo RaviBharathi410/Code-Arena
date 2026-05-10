@@ -1,7 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 export const useVoiceToCode = (onTranscript: (code: string) => void) => {
     const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<any>(null);
+
+    const stopListening = useCallback(() => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            setIsListening(false);
+        }
+    }, []);
 
     const startListening = useCallback(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -11,37 +19,45 @@ export const useVoiceToCode = (onTranscript: (code: string) => void) => {
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        recognitionRef.current = recognition;
+        recognition.continuous = true; // Keep listening for multiple commands
+        recognition.interimResults = true;
         recognition.lang = 'en-US';
 
         recognition.onstart = () => setIsListening(true);
         recognition.onend = () => setIsListening(false);
 
         recognition.onresult = (event: any) => {
-            const transcript = event.results[0][0].transcript.toLowerCase();
-            console.log('Transcript:', transcript);
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript.toLowerCase();
+                }
+            }
 
-            // Enhanced parser logic
+            if (!finalTranscript) return;
+
+            console.log('Final Transcript:', finalTranscript);
+
+            // Enhanced tactical parser
             let generatedCode = '';
-            if (transcript.includes('create function')) {
-                const name = transcript.replace('create function', '').replace('called', '').trim().replace(/\s+/g, '_');
+            if (finalTranscript.includes('create function')) {
+                const name = finalTranscript.replace('create function', '').replace('called', '').trim().replace(/\s+/g, '_');
                 generatedCode = `function ${name || 'myFunction'}() {\n  \n}`;
-            } else if (transcript.includes('create variable')) {
-                const name = transcript.replace('create variable', '').replace('called', '').trim().replace(/\s+/g, '_');
+            } else if (finalTranscript.includes('create variable')) {
+                const name = finalTranscript.replace('create variable', '').replace('called', '').trim().replace(/\s+/g, '_');
                 generatedCode = `const ${name || 'myVar'} = '';`;
-            } else if (transcript.includes('console log')) {
-                const msg = transcript.replace('console log', '').trim();
+            } else if (finalTranscript.includes('console log')) {
+                const msg = finalTranscript.replace('console log', '').trim();
                 generatedCode = `console.log('${msg}');`;
-            } else if (transcript.includes('add comment')) {
-                const comment = transcript.replace('add comment', '').trim();
+            } else if (finalTranscript.includes('add comment')) {
+                const comment = finalTranscript.replace('add comment', '').trim();
                 generatedCode = `// ${comment}`;
-            } else if (transcript.includes('create if statement')) {
-                const condition = transcript.replace('create if statement', '').trim() || 'true';
-                generatedCode = `if (${condition}) {\n  \n}`;
-            } else if (transcript.includes('create for loop')) {
-                generatedCode = `for (let i = 0; i < 10; i++) {\n  \n}`;
-            } else if (transcript.includes('clear arena') || transcript.includes('clear code')) {
+            } else if (finalTranscript.includes('if statement')) {
+                generatedCode = `if (condition) {\n  \n}`;
+            } else if (finalTranscript.includes('for loop')) {
+                generatedCode = `for (let i = 0; i < n; i++) {\n  \n}`;
+            } else if (finalTranscript.includes('clear arena') || finalTranscript.includes('clear code')) {
                 onTranscript('__CLEAR__');
                 return;
             }
@@ -54,5 +70,5 @@ export const useVoiceToCode = (onTranscript: (code: string) => void) => {
         recognition.start();
     }, [onTranscript]);
 
-    return { isListening, startListening };
+    return { isListening, startListening, stopListening };
 };

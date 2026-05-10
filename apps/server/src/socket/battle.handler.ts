@@ -1,92 +1,197 @@
 import { Server, Socket } from 'socket.io';
-import crypto from 'crypto';
-import { db } from '../db';
-import { matches, submissions, problems } from '@arena/database';
-import { eq } from 'drizzle-orm';
 import { CustomSocket } from '../middleware/socketAuth.middleware';
 import { MatchmakingService } from '../modules/matchmaking/matchmaking.service';
-import { redis } from '../lib/redis';
-import { logger } from '../lib/logger';
 import { matchesService } from '../modules/matches/matches.service';
-import { codeExecutionQueue } from '../queues/code-execution.queue';
+import { submissionsService } from '../modules/submissions/submissions.service';
+import { logger } from '../lib/logger';
+import { redis } from '../lib/redis';
+import { db } from '../db';
+import { users } from '@arena/database';
+import { eq } from 'drizzle-orm';
 
 export class BattleHandler {
     private matchmaking: MatchmakingService;
-    private onlineUsers: Map<string, { id: string, username: string, socketId: string }> = new Map();
 
     constructor(private io: Server) {
         this.matchmaking = new MatchmakingService(io);
     }
 
     handleConnection(socket: CustomSocket) {
-        if (socket.user) {
-            const userId = socket.user.id;
-            const userData = {
-                id: userId,
-                username: socket.user.username,
-                socketId: socket.id
-            };
-            this.onlineUsers.set(userId, userData);
+        if (!socket.user) return;
 
-            // Join personal room for targeted notifications (used by matchmaking)
-            socket.join(`user:${userId}`);
+        socket.join(`user:${socket.user.id}`);
 
-            socket.broadcast.emit('user_joined', userData);
-            socket.emit('online_users', Array.from(this.onlineUsers.values()));
-        }
+        socket.on('room:create', (data) => this.handleRoomCreate(socket, data));
+        socket.on('room:join', (data) => this.handleRoomJoin(socket, data));
+        socket.on('room:ready', () => this.handleRoomReady(socket));
+        socket.on('room:set_language', (data) => this.handleSetLanguage(socket, data));
+        
+        socket.on('battle:run_code', (data) => this.handleExecute(socket, { ...data, mode: 'run' }));
+        socket.on('battle:submit', (data) => this.handleExecute(socket, { ...data, mode: 'submit' }));
+        
+        socket.on('voice:speaking', (data) => this.handleVoiceSpeaking(socket, data));
+        socket.on('presence:typing', (data) => this.handleTyping(socket, data));
 
-        socket.on('disconnect', () => this.handleDisconnect(socket));
         socket.on('find_match', () => this.handleFindMatch(socket));
         socket.on('cancel_search', () => this.handleCancelSearch(socket));
-        socket.on('join_match', (matchId) => this.handleJoinMatch(socket, matchId));
-        socket.on('code_update', (data) => this.handleCodeUpdate(socket, data));
-        socket.on('rejoin_match', (matchId) => this.handleRejoinMatch(socket, matchId));
-        socket.on('submit_code', (data) => this.handleSubmitCode(socket, data));
+        socket.on('disconnect', () => this.handleDisconnect(socket));
     }
 
-    private async handleDisconnect(socket: CustomSocket) {
-        if (!socket.user) return;
-        const userId = socket.user.id;
+    private async handleRoomCreate(socket: CustomSocket, { mode }: { mode: '1v1' | 'practice' | 'ranked' }) {
+        try {
+            const room = await matchesService.createMatchRoom({
+                mode,
+                player1Id: socket.user!.id
+            });
+            socket.join(room.id);
+            socket.data.roomId = room.id;
 
-        this.onlineUsers.delete(userId);
-        this.io.emit('user_left', { id: userId });
+            const user = await db.query.users.findFirst({ where: eq(users.id, socket.user!.id) });
+            
+            const fullRoom = await matchesService.getMatchById(room.id);
+            if (!fullRoom) throw new Error('Room intel corrupted');
 
-        // Step 26: Remove from matchmaking queue
-        await this.matchmaking.removeFromQueue(userId);
-
-        // Handle active match disconnect
-        const matchId = socket.data.matchId;
-        if (matchId) {
-            // Set disconnect key with 30s TTL
-            await redis.setex(`disconnect:${matchId}:${userId}`, 30, '1');
-
-            // Notify opponent
-            this.io.to(matchId).emit('OPPONENT_DISCONNECTED', {
-                userId,
-                gracePeriodSeconds: 30
+            socket.emit('room:initial_data', {
+                roomId: room.id,
+                roomCode: room.roomCode,
+                players: [{
+                    id: socket.user!.id,
+                    username: socket.user!.username,
+                    tier: user?.tier || 'BRONZE',
+                    rating: user?.rankRating || 1200
+                }],
+                problem: fullRoom.problem
             });
 
-            // Schedule forfeit check
-            setTimeout(async () => {
-                const stillDisconnected = await redis.get(`disconnect:${matchId}:${userId}`);
-                if (stillDisconnected) {
-                    try {
-                        logger.info(`[MATCH] Forfeiting match ${matchId} for user ${userId} due to timeout`);
-                        await matchesService.forfeitMatch(matchId, userId);
-                        this.io.to(matchId).emit('MATCH_FORFEITED', { userId });
-                    } catch (err) {
-                        logger.error({ err }, '[MATCH] Failed to forfeit match on timeout');
+            logger.info({ roomId: room.id, userId: socket.user!.id }, '[SOCKET] User created room');
+        } catch (err: any) {
+            socket.emit('room:error', { message: err.message });
+        }
+    }
+
+    private async handleRoomJoin(socket: CustomSocket, { roomCode }: { roomCode: string }) {
+        try {
+            const room = await matchesService.joinMatchRoom(roomCode, socket.user!.id);
+            socket.join(room.id);
+            socket.data.roomId = room.id;
+
+            const fullRoom = await matchesService.getMatchById(room.id);
+            if (!fullRoom) throw new Error('Room intel corrupted');
+
+            const isP1 = room.player1Id === socket.user!.id;
+            const opponent = isP1 ? fullRoom.player2 : fullRoom.player1;
+
+            if (opponent && fullRoom) {
+                const user = await db.query.users.findFirst({ where: eq(users.id, socket.user!.id) });
+                socket.to(room.id).emit('room:player_joined', {
+                    player: {
+                        id: socket.user!.id,
+                        username: socket.user!.username,
+                        tier: user?.tier || 'BRONZE',
+                        rating: user?.rankRating || 1200
                     }
-                }
-            }, 30000);
+                });
+            }
+
+            if (!fullRoom) throw new Error('Room intel corrupted');
+
+            socket.emit('room:initial_data', {
+                roomId: room.id,
+                roomCode: room.roomCode,
+                players: [
+                    {
+                        id: fullRoom.player1.id,
+                        username: fullRoom.player1.username,
+                        tier: fullRoom.player1.tier,
+                        rating: fullRoom.player1.rankRating
+                    },
+                    fullRoom.player2 ? {
+                        id: fullRoom.player2.id,
+                        username: fullRoom.player2.username,
+                        tier: fullRoom.player2.tier,
+                        rating: fullRoom.player2.rankRating
+                    } : null
+                ].filter(Boolean),
+                problem: fullRoom.problem
+            });
+
+            logger.info({ roomId: room.id, userId: socket.user!.id }, '[SOCKET] User joined room');
+        } catch (err: any) {
+            socket.emit('room:error', { message: err.message });
+        }
+    }
+
+    private async handleRoomReady(socket: CustomSocket) {
+        const roomId = socket.data.roomId;
+        if (!roomId || !socket.user) return;
+
+        try {
+            const { room, bothReady } = await matchesService.setReady(roomId, socket.user.id);
+            
+            this.io.to(roomId).emit('room:player_ready', { userId: socket.user.id });
+
+            if (bothReady) {
+                const fullRoom = await matchesService.getMatchById(roomId);
+                if (!fullRoom) return;
+
+                // Start 3-2-1 countdown on client via this event
+                this.io.to(roomId).emit('room:both_ready', {
+                    problem: fullRoom.problem,
+                    startedAt: new Date()
+                });
+                logger.info({ roomId }, '[SOCKET] Both players ready, match starting');
+            }
+        } catch (err: any) {
+            socket.emit('room:error', { message: err.message });
+        }
+    }
+
+    private async handleSetLanguage(socket: CustomSocket, { language }: { language: string }) {
+        const roomId = socket.data.roomId;
+        if (!roomId || !socket.user) return;
+
+        socket.to(roomId).emit('room:opponent_language', { language });
+    }
+
+    private async handleExecute(socket: CustomSocket, data: { code: string, language: string, mode: 'run' | 'submit' }) {
+        const roomId = socket.data.roomId;
+        if (!roomId || !socket.user) return;
+
+        try {
+            if (data.mode === 'submit') {
+                socket.to(roomId).emit('battle:opponent_submitted', { status: 'CHECKING' });
+            }
+
+            await submissionsService.executeCode({
+                matchId: roomId,
+                userId: socket.user.id,
+                code: data.code,
+                language: data.language,
+                mode: data.mode
+            });
+        } catch (err: any) {
+            socket.emit('battle:error', { message: err.message });
+        }
+    }
+
+    private handleVoiceSpeaking(socket: CustomSocket, { active }: { active: boolean }) {
+        const roomId = socket.data.roomId;
+        if (roomId) {
+            socket.to(roomId).emit('voice:opponent_speaking', { active });
+        }
+    }
+
+    private handleTyping(socket: CustomSocket, { lines }: { lines: number }) {
+        const roomId = socket.data.roomId;
+        if (roomId) {
+            socket.to(roomId).emit('presence:opponent_typing', { lines });
         }
     }
 
     private async handleFindMatch(socket: CustomSocket) {
         if (!socket.user) return;
-        // In a real app, fetch actual ELO. For now, use a default or 1200.
-        const elo = 1200;
-        await this.matchmaking.findMatch(socket.user.id, elo);
+        const user = await db.query.users.findFirst({ where: eq(users.id, socket.user.id) });
+        await this.matchmaking.findMatch(socket.user.id, user?.rankRating || 1200);
     }
 
     private async handleCancelSearch(socket: CustomSocket) {
@@ -94,133 +199,9 @@ export class BattleHandler {
         await this.matchmaking.removeFromQueue(socket.user.id);
     }
 
-    private async handleJoinMatch(socket: CustomSocket, matchId: string) {
-        socket.join(matchId);
-        socket.data.matchId = matchId; // Store matchId in socket session
-        logger.debug(`User ${socket.user?.id} joined match room ${matchId}`);
-
-        // Fetch current match state from Redis (if any exists yet)
-        if (socket.user) {
-            const myCode = await redis.get(`match:${matchId}:code:${socket.user.id}`);
-            if (myCode) {
-                socket.emit('match:sync_state', {
-                    userId: socket.user.id,
-                    code: myCode
-                });
-            }
-        }
-    }
-
-    private async handleRejoinMatch(socket: CustomSocket, matchId: string) {
+    private async handleDisconnect(socket: CustomSocket) {
         if (!socket.user) return;
-        const userId = socket.user.id;
-
-        // Clear disconnect key
-        await redis.del(`disconnect:${matchId}:${userId}`);
-
-        socket.join(matchId);
-        socket.data.matchId = matchId;
-
-        // Fetch latest match state to resync the reconnected user
-        const myCode = await redis.get(`match:${matchId}:code:${userId}`);
-        
-        // Also fetch opponent's code state if we want to immediately sync them
-        // This requires knowing the opponent's ID, which we'd typically get from the match metadata in Redis
-        const matchMetaStr = await redis.get(`match:${matchId}`);
-        let opponentCode = null;
-        let opponentId = null;
-
-        if (matchMetaStr) {
-            const matchMeta = JSON.parse(matchMetaStr);
-            opponentId = matchMeta.player1Id === userId ? matchMeta.player2Id : matchMeta.player1Id;
-            if (opponentId) {
-                opponentCode = await redis.get(`match:${matchId}:code:${opponentId}`);
-            }
-        }
-
-        socket.emit('match:sync_state', {
-            userId: userId,
-            code: myCode || '',
-            opponentId,
-            opponentCode: opponentCode || ''
-        });
-
-        this.io.to(matchId).emit('OPPONENT_RECONNECTED', { userId });
-    }
-
-    private async handleCodeUpdate(socket: CustomSocket, { matchId, code }: { matchId: string, code: string }) {
-        if (!socket.user) return;
-        
-        // Persist code state to Redis with a TTL (e.g., 2 hours)
-        await redis.setex(`match:${matchId}:code:${socket.user.id}`, 7200, code);
-
-        socket.to(matchId).emit('opponent_code_update', {
-            playerId: socket.user.id,
-            code
-        });
-    }
-
-    private async handleSubmitCode(socket: CustomSocket, {
-        matchId, code, language
-    }: { matchId: string, code: string, language: string }) {
-        if (!socket.user) return;
-        const userId = socket.user.id;
-
-        // Language ID mapping for Judge0
-        const LANGUAGE_MAP: Record<string, number> = {
-            javascript: 63,
-            python: 71,
-            java: 62,
-            cpp: 54,
-            typescript: 74,
-        };
-        const languageId = LANGUAGE_MAP[language] || 63;
-
-        try {
-            // 1. Fetch match + problem from DB
-            const match = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
-            if (!match) return;
-
-            const problem = await db.query.problems.findFirst({ where: eq(problems.id, match.problemId) });
-            if (!problem) return;
-
-            // 2. Record submission start time in Redis
-            const startTimeStr = await redis.get(`match:${matchId}:startedAt`);
-            const startTime = startTimeStr ? parseInt(startTimeStr) : Date.now();
-            const timeTaken = Math.floor((Date.now() - startTime) / 1000);
-            await redis.setex(`match:${matchId}:timeTaken:${userId}`, 7200, timeTaken.toString());
-
-            // 3. Create a Submission record in the DB
-            const submissionId = crypto.randomUUID();
-            await db.insert(submissions).values({
-                id: submissionId,
-                matchId,
-                userId,
-                code,
-                languageId,
-                status: 'pending',
-                submittedAt: new Date(),
-            });
-
-            // 4. Enqueue code execution job
-            await codeExecutionQueue.add('execute', {
-                submissionId,
-                code,
-                languageId,
-                problemId: match.problemId,
-                matchId,
-                userId,
-                testCases: problem.testCases,
-            });
-
-            logger.info({ submissionId, matchId, userId }, '[SOCKET] Code submitted, execution queued');
-
-            // 5. Notify user that their code is being evaluated
-            socket.emit('submission:queued', { submissionId });
-
-        } catch (err: any) {
-            logger.error({ err, matchId, userId }, '[SOCKET] Failed to submit code');
-            socket.emit('match:error', { message: 'Failed to queue code for execution.' });
-        }
+        await this.matchmaking.removeFromQueue(socket.user.id);
+        // Handle in-room disconnect if needed
     }
 }

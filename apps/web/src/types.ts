@@ -14,7 +14,7 @@ export function createAsyncState<T>(initial: T): AsyncState<T> {
 
 // ── Difficulty ────────────────────────────────────────────────────────────
 
-export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD' | 'EXTREME';
 
 // ── User & Auth ──────────────────────────────────────────────────────────
 
@@ -22,17 +22,14 @@ export interface User {
     id: string;
     username: string;
     email?: string;
-    rating?: number;
-    level?: number;
-    experience?: number;
-    wins?: number;
-    losses?: number;
-    badges?: string[];
-}
-
-export interface AuthResponse {
-    user: User;
-    token: string;
+    rankRating: number;
+    wins: number;
+    losses: number;
+    totalBattles: number;
+    winRate: number;
+    tier: 'IRON' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'OPERATOR';
+    avatarUrl?: string;
+    lastActive?: string;
 }
 
 // ── Problem ──────────────────────────────────────────────────────────────
@@ -45,35 +42,50 @@ export interface Example {
 
 export interface TestCase {
     input: any;
-    expected: any;
+    expected_output: any;
+    is_hidden: boolean;
 }
 
 export interface Problem {
     id: string;
+    slug: string;
     title: string;
     difficulty: Difficulty;
+    category: string;
     description: string;
-    examples?: Example[];
-    constraints?: string[];
-    baseCode?: string;
-    testCases?: TestCase[];
+    constraints: string;
+    examples: Example[];
+    testCases: TestCase[];
+    boilerplate: Record<string, string>;
+    optimalTimeComplexity?: string;
+    optimalSpaceComplexity?: string;
+    tags?: string[];
 }
 
 // ── Match & Battle ───────────────────────────────────────────────────────
 
-export type MatchStatus = 'waiting' | 'active' | 'completed' | 'cancelled';
+export type MatchStatus = 'waiting' | 'active' | 'completed' | 'abandoned';
 
-export interface Match {
+export interface MatchRoom {
     id: string;
+    roomCode: string;
+    mode: '1v1' | 'practice' | 'ranked';
+    status: MatchStatus;
     problemId: string;
     player1Id: string;
-    player2Id: string;
+    player2Id?: string;
+    player1Lang?: string;
+    player2Lang?: string;
+    startedAt?: string;
+    endedAt?: string;
     winnerId?: string;
-    status: MatchStatus;
+    problem?: Problem;
+    player1?: User;
+    player2?: User;
     createdAt?: string;
 }
 
-export type SubmissionStatus = 'pending' | 'running' | 'passed' | 'failed';
+export type SubmissionStatus = 'PENDING' | 'ACCEPTED' | 'WRONG' | 'TLE' | 'MLE' | 'ERROR' | 'PROCESSING';
 
 export interface Submission {
     id: string;
@@ -82,29 +94,33 @@ export interface Submission {
     code: string;
     language: string;
     status: SubmissionStatus;
-    executionTimeMs?: number;
+    timeMs?: number;
+    memoryKb?: number;
+    testCasesPass?: number;
+    testCasesTotal?: number;
+    timeComplexity?: string;
+    spaceComplexity?: string;
+    qualityScore?: number;
+    finalScore?: number;
+    submittedAt: string;
 }
 
-// ── Tournament ───────────────────────────────────────────────────────────
-
-export interface Tournament {
-    id: string;
-    title: string;
-    status: string;
-    startTime: string;
-    bracketData?: any;
-    tier?: string;
-    prizePool?: string;
-    maxPlayers?: number;
+export interface MatchResult {
+    winnerId: string | null;
+    p1Score: number;
+    p2Score: number;
+    p1Sub: Submission | null;
+    p2Sub: Submission | null;
+    rankDeltaP1?: number;
+    rankDeltaP2?: number;
 }
-
-// ── Leaderboard ──────────────────────────────────────────────────────────
 
 export interface LeaderboardEntry {
     rank: number;
     userId: string;
     username: string;
-    rating: number;
+    rankRating: number;
     wins: number;
-    winRate?: number;
+    winRate: number;
+    tier: User['tier'];
 }

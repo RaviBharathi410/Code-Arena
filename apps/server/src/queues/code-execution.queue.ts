@@ -1,13 +1,13 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { bullmqConnection } from './connection';
 import { db } from '../db';
-import { submissions } from '@arena/database';
+import { submissions, matchRooms, problems } from '@arena/database';
 import { eq } from 'drizzle-orm';
 import { env } from '../config/env';
 import crypto from 'crypto';
 import { logger } from '../lib/logger';
-
-// ── Queue Definition ───────────────────────────────────────────────────────
+import { createBullMQRedisClient } from '../lib/redis';
+import { scoringEngine } from '../lib/scoring';
+import { matchesService } from '../modules/matches/matches.service';
 
 export interface CodeExecutionJobData {
     submissionId: string;
@@ -16,44 +16,21 @@ export interface CodeExecutionJobData {
     problemId: string;
     matchId: string;
     userId: string;
-    testCases: any; // Problem test cases to run against
-}
-
-export interface CodeExecutionResult {
-    submissionId: string;
-    status: string;
-    runtime: number | null;
-    memory: number | null;
-    testResults: any;
+    testCases: any[];
+    mode: 'run' | 'submit';
 }
 
 export const codeExecutionQueue = new Queue<CodeExecutionJobData>('code-execution', {
-    connection: bullmqConnection,
+    connection: createBullMQRedisClient(),
     defaultJobOptions: {
         attempts: 3,
-        backoff: {
-            type: 'exponential',
-            delay: 2000,
-        },
-        removeOnComplete: { count: 1000 }, // Keep last 1000 completed jobs
-        removeOnFail: { count: 5000 },     // Keep last 5000 failed jobs for debugging
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: { count: 5000 },
     },
 });
 
-// ── Worker ─────────────────────────────────────────────────────────────────
-
-/**
- * Code execution worker.
- *
- * Flow:
- * 1. Receives { submissionId, code, languageId, problemId, matchId, userId }
- * 2. POSTs to Judge0 REST API with a callbackUrl pointing to POST /internal/judge0/callback
- * 3. Saves submission record to DB with status PENDING
- * 4. On callback received (handled by the webhook route):
- *    - Parse verdict, update DB, emit Socket.IO event
- */
 let socketIOInstance: any = null;
-
 export function setSocketIOInstance(io: any) {
     socketIOInstance = io;
 }
@@ -61,159 +38,146 @@ export function setSocketIOInstance(io: any) {
 export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
     'code-execution',
     async (job: Job<CodeExecutionJobData>) => {
-        const { submissionId, code, languageId, matchId, userId, testCases } = job.data;
-
-        logger.info({ submissionId, matchId, jobId: job.id }, '[QUEUE:CODE] Processing submission');
+        const { submissionId, code, languageId, matchId, userId, testCases, mode } = job.data;
 
         try {
-            // 1. Mark submission as PROCESSING in DB
-            await db.update(submissions)
-                .set({ status: 'processing' })
-                .where(eq(submissions.id, submissionId));
-
-            // 2. Build and sign the callback URL for Judge0 webhook
-            const payload = `${submissionId}:${matchId}:${userId}`;
-            const signature = crypto.createHmac('sha256', env.JWT_SECRET).update(payload).digest('hex');
-            const callbackUrl = `${env.JUDGE0_API_URL.replace(/\/+$/, '')}/internal/judge0/callback?submissionId=${submissionId}&matchId=${matchId}&userId=${userId}&sig=${signature}`;
-
-            // 3. Submit to Judge0
-            const judge0Response = await fetch(`${env.JUDGE0_API_URL}/submissions?base64_encoded=false&wait=false`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-RapidAPI-Key': env.JUDGE0_API_KEY,
-                    'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-                },
-                body: JSON.stringify({
-                    source_code: code,
-                    language_id: languageId,
-                    callback_url: callbackUrl,
-                    stdin: testCases?.input || '',
-                    expected_output: testCases?.expectedOutput || '',
-                }),
-            });
-
-            if (!judge0Response.ok) {
-                const errorText = await judge0Response.text();
-                throw new Error(`Judge0 API error: ${judge0Response.status} — ${errorText}`);
+            if (mode === 'submit') {
+                await db.update(submissions)
+                    .set({ status: 'PROCESSING' })
+                    .where(eq(submissions.id, submissionId));
             }
 
-            const judge0Data = await judge0Response.json();
-            
-            logger.info({
-                submissionId,
-                judge0Token: judge0Data.token,
-            }, '[QUEUE:CODE] Submitted to Judge0, awaiting callback');
+            // Prepare batch submissions for Judge0
+            const judgeSubmissions = testCases.map((tc, index) => ({
+                source_code: code,
+                language_id: languageId,
+                stdin: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
+                expected_output: typeof tc.expected_output === 'string' ? tc.expected_output : JSON.stringify(tc.expected_output),
+                // We'll use a single callback for the whole batch if possible, or poll.
+                // Judge0 Standard doesn't support batch callbacks easily. 
+                // We'll submit individually but in parallel and wait.
+            }));
 
-            // Store Judge0 token for reference
-            return { judge0Token: judge0Data.token, submissionId };
+            const results = await Promise.all(judgeSubmissions.map(async (sub) => {
+                const response = await fetch(`${env.JUDGE0_API_URL}/submissions?base64_encoded=false&wait=true`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-RapidAPI-Key': env.JUDGE0_API_KEY,
+                    },
+                    body: JSON.stringify(sub),
+                });
+                return response.json();
+            }));
+
+            // Process results
+            let allPassed = true;
+            let passedCount = 0;
+            let maxTime = 0;
+            let maxMemory = 0;
+            const testResults = results.map((res, i) => {
+                const passed = res.status?.id === 3;
+                if (!passed) allPassed = false;
+                else passedCount++;
+
+                if (res.time) maxTime = Math.max(maxTime, parseFloat(res.time));
+                if (res.memory) maxMemory = Math.max(maxMemory, res.memory);
+
+                return {
+                    testCaseIndex: i,
+                    status: res.status?.description,
+                    passed,
+                    stdout: res.stdout,
+                    stderr: res.stderr,
+                    compile_output: res.compile_output,
+                    time: res.time,
+                    memory: res.memory
+                };
+            });
+
+            const finalStatus = allPassed ? 'ACCEPTED' : (testResults.find(r => !r.passed)?.status?.toUpperCase() || 'WRONG');
+
+            if (mode === 'submit') {
+                const problem = await db.query.problems.findFirst({ where: eq(problems.id, job.data.problemId) });
+                
+                // Complexity Detection
+                const detectedComplexity = scoringEngine.detectComplexity(maxTime * 1000, 1000); // Dummy N=1000
+                const finalScore = scoringEngine.calculateScore({
+                    status: finalStatus as any,
+                    timeSeconds: maxTime,
+                    detectedComplexity,
+                    optimalComplexity: problem?.optimalTimeComplexity || 'O(n)',
+                    qualityScore: 8 // Placeholder
+                });
+
+                await db.update(submissions)
+                    .set({
+                        status: finalStatus,
+                        timeMs: Math.round(maxTime * 1000),
+                        memoryKb: maxMemory,
+                        testCasesPass: passedCount,
+                        testCasesTotal: testCases.length,
+                        timeComplexity: detectedComplexity,
+                        qualityScore: 8,
+                        finalScore,
+                        testResults: testResults as any
+                    })
+                    .where(eq(submissions.id, submissionId));
+                
+                // If accepted, check if match is over
+                if (allPassed) {
+                    const room = await db.query.matchRooms.findFirst({ where: eq(matchRooms.id, matchId) });
+                    const isPlayer1 = room?.player1Id === userId;
+                    const updatedField = isPlayer1 ? { player1DoneAt: new Date() } : { player2DoneAt: new Date() };
+                    
+                    const [updatedRoom] = await db.update(matchRooms)
+                        .set(updatedField)
+                        .where(eq(matchRooms.id, matchId))
+                        .returning();
+
+                    // Check if both are done
+                    if (updatedRoom.player1DoneAt && updatedRoom.player2DoneAt) {
+                        const results = await matchesService.calculateMatchResult(matchId);
+                        if (socketIOInstance) {
+                            socketIOInstance.to(matchId).emit('match:result', results);
+                        }
+                    }
+                }
+            }
+
+            // Notify via Socket
+            if (socketIOInstance) {
+                const event = mode === 'submit' ? 'battle:submission_result' : 'battle:run_result';
+                socketIOInstance.to(matchId).emit(event, {
+                    userId,
+                    submissionId,
+                    status: finalStatus,
+                    testCasesPass: passedCount,
+                    testCasesTotal: testCases.length,
+                    results: mode === 'run' ? testResults : undefined, // Only show details for run
+                    timeMs: Math.round(maxTime * 1000),
+                    memoryKb: maxMemory,
+                    timeComplexity: detectedComplexity,
+                    qualityScore: 8 // Placeholder
+                });
+
+                if (mode === 'submit' && allPassed) {
+                    socketIOInstance.to(matchId).emit('battle:opponent_done', {
+                        userId,
+                        status: 'ACCEPTED',
+                        testCasesPass: passedCount,
+                        timeMs: Math.round(maxTime * 1000)
+                    });
+                }
+            }
 
         } catch (err: any) {
             logger.error({ err, submissionId }, '[QUEUE:CODE] Execution failed');
-
-            // Mark submission as failed
-            await db.update(submissions)
-                .set({ status: 'error' })
-                .where(eq(submissions.id, submissionId));
-
-            // Notify user of failure via Socket.IO
-            if (socketIOInstance) {
-                socketIOInstance.to(`user:${userId}`).emit('match:verdict', {
-                    userId,
-                    submissionId,
-                    status: 'error',
-                    message: 'Code execution failed. Please try again.',
-                });
+            if (mode === 'submit') {
+                await db.update(submissions).set({ status: 'ERROR' }).where(eq(submissions.id, submissionId));
             }
-
-            throw err; // BullMQ will retry based on backoff config
+            throw err;
         }
     },
-    {
-        connection: bullmqConnection,
-        concurrency: 10, // Process up to 10 submissions concurrently
-    }
+    { connection: createBullMQRedisClient(), concurrency: 10 }
 );
-
-codeExecutionWorker.on('completed', (job) => {
-    logger.info({ jobId: job.id }, '[QUEUE:CODE] Job completed');
-});
-
-codeExecutionWorker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, err: err.message }, '[QUEUE:CODE] Job failed');
-});
-
-/**
- * Process Judge0 callback result.
- * Called by the /internal/judge0/callback webhook route.
- */
-export async function processJudge0Callback(data: {
-    submissionId: string;
-    matchId: string;
-    userId: string;
-    status: { id: number; description: string };
-    time: string | null;
-    memory: number | null;
-    stdout: string | null;
-    stderr: string | null;
-    compile_output: string | null;
-}) {
-    const { submissionId, matchId, userId, status, time, memory } = data;
-
-    // Map Judge0 status IDs to our status strings
-    // 1 = In Queue, 2 = Processing, 3 = Accepted, 4 = Wrong Answer, etc.
-    const statusMap: Record<number, string> = {
-        3: 'accepted',
-        4: 'wrong_answer',
-        5: 'time_limit_exceeded',
-        6: 'compilation_error',
-        7: 'runtime_error_sigsegv',
-        8: 'runtime_error_sigxfsz',
-        9: 'runtime_error_sigfpe',
-        10: 'runtime_error_sigabrt',
-        11: 'runtime_error_nzec',
-        12: 'runtime_error_other',
-        13: 'internal_error',
-        14: 'exec_format_error',
-    };
-
-    const mappedStatus = statusMap[status.id] || 'unknown';
-    const runtime = time ? parseFloat(time) * 1000 : null; // Convert to ms
-    const memoryUsed = memory || null;
-
-    // Update submission in DB
-    await db.update(submissions)
-        .set({
-            status: mappedStatus,
-            executionTime: runtime ? Math.round(runtime) : null,
-            memoryUsed,
-            testResults: {
-                judge0StatusId: status.id,
-                judge0StatusDesc: status.description,
-                stdout: data.stdout,
-                stderr: data.stderr,
-                compileOutput: data.compile_output,
-            },
-        })
-        .where(eq(submissions.id, submissionId));
-
-    // Emit verdict to match room via Socket.IO
-    if (socketIOInstance) {
-        socketIOInstance.to(matchId).emit('match:verdict', {
-            userId,
-            submissionId,
-            status: mappedStatus,
-            runtime,
-            memory: memoryUsed,
-        });
-    }
-
-    logger.info({
-        submissionId,
-        matchId,
-        status: mappedStatus,
-        runtime,
-    }, '[QUEUE:CODE] Verdict processed and emitted');
-
-    return { submissionId, status: mappedStatus, runtime, memory: memoryUsed };
-}
