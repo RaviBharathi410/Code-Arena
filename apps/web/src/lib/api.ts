@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-export const BASE_URL = '/api';
-export const SOCKET_URL = '/';
+export const BASE_URL = 'http://127.0.0.1:3001/api';
+export const SOCKET_URL = 'http://127.0.0.1:3001';
 
 const api = axios.create({
     baseURL: BASE_URL,
@@ -17,8 +17,13 @@ api.interceptors.response.use(
 
         // If the error is 401 and we haven't retried yet
         if (error.response && error.response.status === 401 && !originalRequest._retry) {
-            // Ignore refresh logic if the request itself was for logging in or refreshing
-            if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/auth/register')) {
+            // Ignore refresh logic if the request itself was for logging in, refreshing, or logging out
+            if (
+                originalRequest.url?.includes('/auth/login') || 
+                originalRequest.url?.includes('/auth/refresh') || 
+                originalRequest.url?.includes('/auth/register') ||
+                originalRequest.url?.includes('/auth/logout')
+            ) {
                 return Promise.reject(error);
             }
 
@@ -27,7 +32,7 @@ api.interceptors.response.use(
             try {
                 // Important: use a separate axios instance or raw axios 
                 // to avoid infinite interceptor loops
-                const rs = await axios.post('/api/auth/refresh', {}, {
+                const rs = await axios.post(`${BASE_URL}/auth/refresh`, {}, {
                     withCredentials: true
                 });
 

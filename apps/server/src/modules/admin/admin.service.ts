@@ -1,6 +1,6 @@
 import { db } from '../../db';
-import { users, matches, submissions } from '@arena/database';
-import { eq, desc, sql, count, and } from 'drizzle-orm';
+import { users, matchRooms, submissions } from '@arena/database';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import { logger } from '../../lib/logger';
 
 /**
@@ -11,13 +11,11 @@ export class AdminService {
     /**
      * List all users with pagination, including role and stats.
      */
-    async listUsers(options: { limit?: number; offset?: number; role?: string }) {
+    async listUsers(options: { limit?: number; offset?: number }) {
         const limit = Math.min(options.limit || 50, 200);
         const offset = options.offset || 0;
 
-        const whereClause = options.role
-            ? eq(users.role, options.role)
-            : undefined;
+        const whereClause = undefined;
 
         const [totalCount] = await db.select({ value: sql<number>`count(*)` })
             .from(users)
@@ -27,12 +25,9 @@ export class AdminService {
             id: users.id,
             username: users.username,
             email: users.email,
-            role: users.role,
-            eloRating: users.eloRating,
+            rankRating: users.rankRating,
             wins: users.wins,
             losses: users.losses,
-            level: users.level,
-            xp: users.xp,
             createdAt: users.createdAt,
         })
             .from(users)
@@ -63,9 +58,9 @@ export class AdminService {
 
         // Count total matches and submissions
         const [matchCount] = await db.select({ value: sql<number>`count(*)` })
-            .from(matches)
+            .from(matchRooms)
             .where(
-                sql`${matches.player1Id} = ${userId} OR ${matches.player2Id} = ${userId}`
+                sql`${matchRooms.player1Id} = ${userId} OR ${matchRooms.player2Id} = ${userId}`
             );
 
         const [submissionCount] = await db.select({ value: sql<number>`count(*)` })
@@ -80,68 +75,17 @@ export class AdminService {
     }
 
     /**
-     * Update a user's role (promote/demote).
-     */
-    async updateUserRole(userId: string, newRole: string) {
-        const validRoles = ['player', 'moderator', 'admin'];
-        if (!validRoles.includes(newRole)) {
-            throw new Error(`Invalid role: ${newRole}. Valid roles: ${validRoles.join(', ')}`);
-        }
-
-        const [updated] = await db.update(users)
-            .set({ role: newRole, updatedAt: new Date() })
-            .where(eq(users.id, userId))
-            .returning();
-
-        if (!updated) throw new Error('User not found');
-
-        const { passwordHash, ...safeUser } = updated;
-        logger.info({ userId, newRole }, '[ADMIN] User role updated');
-        return safeUser;
-    }
-
-    /**
-     * Ban a user by setting their role to 'banned'.
-     */
-    async banUser(userId: string, reason?: string) {
-        const [updated] = await db.update(users)
-            .set({ role: 'banned', updatedAt: new Date() })
-            .where(eq(users.id, userId))
-            .returning();
-
-        if (!updated) throw new Error('User not found');
-
-        logger.warn({ userId, reason }, '[ADMIN] User banned');
-        return { success: true, userId, reason };
-    }
-
-    /**
-     * Unban a user (restore to 'player').
-     */
-    async unbanUser(userId: string) {
-        const [updated] = await db.update(users)
-            .set({ role: 'player', updatedAt: new Date() })
-            .where(eq(users.id, userId))
-            .returning();
-
-        if (!updated) throw new Error('User not found');
-
-        logger.info({ userId }, '[ADMIN] User unbanned');
-        return { success: true, userId };
-    }
-
-    /**
-     * Reset a user's Elo rating back to default (1200).
+     * Reset a user's Rank rating back to default (1200).
      */
     async resetUserElo(userId: string) {
         const [updated] = await db.update(users)
-            .set({ eloRating: 1200, updatedAt: new Date() })
+            .set({ rankRating: 1200 })
             .where(eq(users.id, userId))
             .returning();
 
         if (!updated) throw new Error('User not found');
 
-        logger.info({ userId }, '[ADMIN] User Elo reset to 1200');
+        logger.info({ userId }, '[ADMIN] User Rank reset to 1200');
         return { success: true, userId, newElo: 1200 };
     }
 
@@ -150,16 +94,16 @@ export class AdminService {
      */
     async getSystemStats() {
         const [userCount] = await db.select({ value: sql<number>`count(*)` }).from(users);
-        const [matchCount] = await db.select({ value: sql<number>`count(*)` }).from(matches);
+        const [matchCount] = await db.select({ value: sql<number>`count(*)` }).from(matchRooms);
         const [submissionCount] = await db.select({ value: sql<number>`count(*)` }).from(submissions);
 
         const [activeMatches] = await db.select({ value: sql<number>`count(*)` })
-            .from(matches)
-            .where(eq(matches.status, 'active'));
+            .from(matchRooms)
+            .where(eq(matchRooms.status, 'active'));
 
         const [completedMatches] = await db.select({ value: sql<number>`count(*)` })
-            .from(matches)
-            .where(eq(matches.status, 'completed'));
+            .from(matchRooms)
+            .where(eq(matchRooms.status, 'completed'));
 
         // Recent registrations (last 24h)
         const [recentSignups] = await db.select({ value: sql<number>`count(*)` })

@@ -31,7 +31,8 @@ export class SubmissionsService {
         });
 
         if (!match) throw new Error('Match not found');
-        if (match.status !== 'active') throw new Error('Match is not active');
+        // Allow execution even if practice room hasn't transitioned to 'active' yet
+        if (match.status === 'completed') throw new Error('Match is already completed');
 
         const problem = await db.query.problems.findFirst({
             where: eq(problems.id, match.problemId),
@@ -39,10 +40,10 @@ export class SubmissionsService {
 
         if (!problem) throw new Error('Problem not found');
 
-        // If 'run' mode, we only run the first 2 sample test cases
+        // If 'run' mode, we run up to 25 sample test cases
         // If 'submit' mode, we run ALL test cases including hidden ones
         const testCasesToRun = data.mode === 'run' 
-            ? (problem.testCases as any[]).filter(tc => !tc.is_hidden).slice(0, 2)
+            ? (problem.testCases as any[]).filter(tc => !tc.is_hidden).slice(0, 25)
             : (problem.testCases as any[]);
 
         const submissionId = crypto.randomUUID();
@@ -68,7 +69,8 @@ export class SubmissionsService {
             matchId: data.matchId,
             userId: data.userId,
             testCases: testCasesToRun,
-            mode: data.mode
+            mode: data.mode,
+            matchStartedAt: match.startedAt?.toISOString(),
         }, {
             jobId: `exec-${submissionId}`,
         });

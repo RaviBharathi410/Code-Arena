@@ -38,7 +38,7 @@ export class AuthService {
         const accessToken = this.generateAccessToken(newUser);
         const { refreshToken, tokenId } = await this.generateRefreshToken(newUser.id);
 
-        return { accessToken, refreshToken, user: { id: newUser.id, username: newUser.username, role: newUser.role } };
+        return { accessToken, refreshToken, user: { id: newUser.id, username: newUser.username } };
     }
 
     async login(identifier: string, passwordAttempt: string) {
@@ -65,7 +65,7 @@ export class AuthService {
         const accessToken = this.generateAccessToken(user);
         const { refreshToken, tokenId } = await this.generateRefreshToken(user.id);
 
-        return { accessToken, refreshToken, user: { id: user.id, username: user.username, role: user.role } };
+        return { accessToken, refreshToken, user: { id: user.id, username: user.username } };
     }
 
     async refresh(oldRefreshToken: string) {
@@ -150,13 +150,12 @@ export class AuthService {
         return safeUser;
     }
 
-    private generateAccessToken(user: { id: string; username: string; role: string; eloRating?: number }) {
+    private generateAccessToken(user: { id: string; username: string; rankRating?: number }) {
         return jwt.sign(
             {
                 sub: user.id,
                 username: user.username,
-                role: user.role,
-                elo: user.eloRating ?? 1200,
+                elo: user.rankRating ?? 1200,
                 type: 'access'
             },
             env.JWT_SECRET,

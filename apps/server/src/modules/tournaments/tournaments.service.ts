@@ -1,22 +1,12 @@
-import { db } from '../../db';
-import { tournaments } from '@arena/database';
-import { eq, desc } from 'drizzle-orm';
 
 export class TournamentsService {
     async getAllTournaments() {
-        return db
-            .select()
-            .from(tournaments)
-            .orderBy(desc(tournaments.createdAt))
-            .all();
+        // Placeholder until tournaments table is added to schema
+        return [];
     }
 
     async getTournamentById(id: string) {
-        const tournament = await db.select().from(tournaments).where(eq(tournaments.id, id)).get();
-        if (!tournament) {
-            throw new Error('Tournament not found');
-        }
-        return tournament;
+        throw new Error('Tournament feature offline');
     }
 }
 

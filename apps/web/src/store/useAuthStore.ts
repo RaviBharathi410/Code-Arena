@@ -79,7 +79,7 @@ export const useAuthStore = create<AuthState>()(
             updateRating: (newRating: number, change: number) => {
                 const current = get().user;
                 if (!current) return;
-                set({ user: { ...current, rating: newRating } });
+                set({ user: { ...current, rankRating: newRating } });
             },
 
             // Generic patch for wins/losses/xp after a match result

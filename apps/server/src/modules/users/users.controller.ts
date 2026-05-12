@@ -48,8 +48,7 @@ export class UsersController {
                 totalMatches,
                 wins,
                 winRate,
-                elo: user.elo,
-                level: user.level,
+                rankRating: user.rankRating,
             });
         } catch (err: any) {
             res.status(err.message === 'User not found' ? 404 : 500).json({ message: err.message });

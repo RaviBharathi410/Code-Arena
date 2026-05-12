@@ -25,7 +25,8 @@ export class MatchesService {
             id,
             roomCode,
             mode: data.mode,
-            status: 'waiting',
+            status: data.mode === 'practice' ? 'active' : 'waiting',
+            startedAt: data.mode === 'practice' ? new Date() : null,
             player1Id: data.player1Id,
             problemId: problemId as string,
         }).returning();
@@ -111,11 +112,24 @@ export class MatchesService {
         }).where(eq(matchRooms.id, matchId));
 
         // Elo and Rank Updates
+        let deltaP1 = 0, deltaP2 = 0;
         if (room.mode === 'ranked' && winnerId) {
-            await this.updateRankings(room.player1Id, room.player2Id, winnerId, matchId);
+            const deltas = await this.updateRankings(room.player1Id, room.player2Id, winnerId, matchId);
+            deltaP1 = deltas?.deltaP1 ?? 0;
+            deltaP2 = deltas?.deltaP2 ?? 0;
         }
 
-        return { winnerId, p1Score, p2Score, p1Sub, p2Sub };
+        return { 
+            winnerId, 
+            p1Score, 
+            p2Score, 
+            p1Sub, 
+            p2Sub, 
+            deltaP1, 
+            deltaP2,
+            player1Id: room.player1Id,
+            player2Id: room.player2Id
+        };
     }
 
     private async updateRankings(p1Id: string, p2Id: string, winnerId: string, matchId: string) {
@@ -169,6 +183,8 @@ export class MatchesService {
             { userId: p1Id, matchId, delta: deltaP1, newRating: newRatingP1, reason: 'MATCH_COMPLETE' },
             { userId: p2Id, matchId, delta: deltaP2, newRating: newRatingP2, reason: 'MATCH_COMPLETE' }
         ]);
+
+        return { deltaP1, deltaP2, newRatingP1, newRatingP2 };
     }
 }
 

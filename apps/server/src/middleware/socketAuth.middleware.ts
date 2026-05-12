@@ -17,13 +17,21 @@ export const socketAuthMiddleware = (socket: CustomSocket, next: (err?: Error) =
     }
 
     try {
-        const decoded = jwt.verify(token, config.jwtSecret) as { sub: string; username: string };
+        const decoded = jwt.verify(token, config.jwtSecret) as any;
+        
+        if (decoded.type !== 'access') {
+            return next(new Error('Authentication error: Wrong token type'));
+        }
+
         socket.user = {
             id: decoded.sub,
             username: decoded.username
         };
         next();
-    } catch (err) {
+    } catch (err: any) {
+        if (err.name === 'TokenExpiredError') {
+            return next(new Error('Authentication error: Token expired'));
+        }
         next(new Error('Authentication error: Invalid token'));
     }
 };

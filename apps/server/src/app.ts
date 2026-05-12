@@ -26,6 +26,7 @@ import { requireAdmin, requireAuth } from './middleware/auth.middleware';
 
 export const createApp = () => {
     const app = express();
+    logger.info('[ARENA] Initializing Application...');
 
     // ── Step 17: Pino HTTP Logging ────────────────────────────────────────
     app.use(pinoHttp({ logger, genReqId: () => crypto.randomUUID() }));
@@ -37,9 +38,10 @@ export const createApp = () => {
         helmet.contentSecurityPolicy({
             directives: {
                 defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
+                scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
                 styleSrc: ["'self'", "'unsafe-inline'"],
-                connectSrc: ["'self'", env.CORS_ORIGIN],
+                connectSrc: ["'self'", ...env.CORS_ORIGIN.split(',').map(o => o.trim()), "ws://localhost:5173", "wss://localhost:5173", "ws://localhost:3001", "wss://localhost:3001", "ws://127.0.0.1:3001", "wss://127.0.0.1:3001"],
+                imgSrc: ["'self'", "data:", "https:"],
             },
         })
     );

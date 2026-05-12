@@ -8,4 +8,8 @@ export const config = {
     bcryptRounds: env.BCRYPT_ROUNDS,
     jwtExpiresIn: env.JWT_EXPIRES_IN,
     jwtRefreshExpiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    judge0: {
+        apiUrl: env.JUDGE0_API_URL,
+        apiKey: env.JUDGE0_API_KEY,
+    }
 };

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_URL } from '../lib/api';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -13,55 +14,68 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [socket, setSocket] = useState<Socket | null>(null);
     const [connected, setConnected] = useState(false);
-    const socketRef = useRef<Socket | null>(null);
 
-    const connect = useCallback(() => {
-        if (socketRef.current?.connected) return;
+    const { token } = useAuthStore();
 
-        socketRef.current = io(SOCKET_URL, {
+    useEffect(() => {
+        if (!token) {
+            setConnected(false);
+            setSocket(null);
+            return;
+        }
+
+        const s = io(SOCKET_URL, {
             withCredentials: true,
-            path: '/socket.io'
+            path: '/socket.io',
+            autoConnect: true,
+            transports: ['websocket', 'polling'],
+            auth: { token }
         });
-
-        socketRef.current.on('connect', () => {
+ 
+        s.on('connect', () => {
+            console.log('[SOCKET] Connected to uplink');
             setConnected(true);
         });
-
-        socketRef.current.on('disconnect', () => {
+        
+        s.on('disconnect', (reason) => {
+            console.warn('[SOCKET] Disconnected:', reason);
             setConnected(false);
         });
-    }, []);
+
+        s.on('connect_error', (err) => {
+            console.error('[SOCKET] Connection Error:', err.message);
+            setConnected(false);
+        });
+
+        setSocket(s);
+ 
+        return () => {
+            s.disconnect();
+        };
+    }, [token]);
+
+    const connect = useCallback(() => {
+        socket?.connect();
+    }, [socket]);
 
     const emit = useCallback((event: string, data?: any) => {
-        socketRef.current?.emit(event, data);
-    }, []);
+        socket?.emit(event, data);
+    }, [socket]);
 
     const on = useCallback((event: string, callback: (...args: any[]) => void) => {
-        // Queue the event registration if socket is not ready, or just attach it.
-        // It's safer to attach it when the component renders.
-        // If socketRef isn't initialized yet, this might attach late if we aren't careful.
-        // For simplicity now, we assume connect() is called early.
-        if (socketRef.current) {
-            socketRef.current.on(event, callback);
+        if (socket) {
+            socket.on(event, callback);
         }
         
         return () => {
-            socketRef.current?.off(event, callback);
+            socket?.off(event, callback);
         };
-    }, []);
-
-    useEffect(() => {
-        return () => {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-                socketRef.current = null;
-            }
-        };
-    }, []);
+    }, [socket]);
 
     const value = {
-        socket: socketRef.current,
+        socket,
         connected,
         emit,
         on,

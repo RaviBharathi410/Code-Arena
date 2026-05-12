@@ -32,21 +32,21 @@ export class LeaderboardService {
             .select({
                 id: users.id,
                 username: users.username,
-                eloRating: users.eloRating,
+                rankRating: users.rankRating,
                 wins: users.wins,
                 losses: users.losses,
                 avatarUrl: users.avatarUrl,
-                rank: sql<number>`rank() OVER (ORDER BY ${users.eloRating} DESC)`
+                rank: sql<number>`rank() OVER (ORDER BY ${users.rankRating} DESC)`
             })
             .from(users)
-            .orderBy(desc(users.eloRating))
+            .orderBy(desc(users.rankRating))
             .limit(limit)
             .offset(offset);
 
         // Backfill the Redis leaderboard from DB results
         try {
             for (const entry of data) {
-                await redisLeaderboard.updateRating(entry.id, entry.eloRating);
+                await redisLeaderboard.updateRating(entry.id, entry.rankRating);
             }
             logger.debug({ count: data.length }, '[LEADERBOARD] Redis backfilled from PostgreSQL');
         } catch (err) {
@@ -65,7 +65,7 @@ export class LeaderboardService {
                 // Still need username/wins/losses from DB
                 const user = await db.query.users.findFirst({
                     where: eq(users.id, userId),
-                    columns: { id: true, username: true, eloRating: true, wins: true, losses: true },
+                    columns: { id: true, username: true, rankRating: true, wins: true, losses: true },
                 });
                 if (user) {
                     return { ...user, rank };
@@ -81,10 +81,10 @@ export class LeaderboardService {
                 SELECT 
                     id, 
                     username, 
-                    elo_rating, 
+                    rank_rating, 
                     wins, 
                     losses, 
-                    rank() OVER (ORDER BY elo_rating DESC) as rank
+                    rank() OVER (ORDER BY rank_rating DESC) as rank
                 FROM users
             )
             SELECT * FROM RankedUsers WHERE id = ${userId}

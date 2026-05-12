@@ -30,6 +30,9 @@ export const Login: React.FC = () => {
     useEffect(() => {
         const mode = searchParams.get('mode');
         if (mode === 'register') setIsLogin(false);
+    }, [searchParams]);
+
+    useEffect(() => {
         const ctx = gsap.context(() => {
             gsap.fromTo(cardRef.current,
                 { y: 40, opacity: 0, scale: 0.97 },
@@ -41,7 +44,7 @@ export const Login: React.FC = () => {
             );
         }, containerRef);
         return () => ctx.revert();
-    }, [isLogin, searchParams]);
+    }, [isLogin]);
 
     const validate = () => {
         if (isLogin) {
@@ -169,11 +172,11 @@ export const Login: React.FC = () => {
 
                     {/* Mode switcher */}
                     <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-1 mb-7">
-                        <button type="button" onClick={() => setIsLogin(true)}
+                        <button type="button" onClick={() => { if (!isLogin) switchMode(); }}
                             className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${isLogin ? 'bg-accent-secondary text-white shadow-[0_0_15px_rgba(124,58,237,0.3)]' : 'text-white/40 hover:text-white/70'}`}>
                             Sign In
                         </button>
-                        <button type="button" onClick={() => setIsLogin(false)}
+                        <button type="button" onClick={() => { if (isLogin) switchMode(); }}
                             className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${!isLogin ? 'bg-accent-secondary text-white shadow-[0_0_15px_rgba(124,58,237,0.3)]' : 'text-white/40 hover:text-white/70'}`}>
                             Register
                         </button>

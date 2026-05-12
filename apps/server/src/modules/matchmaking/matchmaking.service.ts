@@ -1,6 +1,6 @@
 import { redis } from '../../lib/redis';
 import { logger } from '../../lib/logger';
-import { db } from '../db';
+import { db } from '../../db';
 import { matchRooms } from '@arena/database';
 import crypto from 'crypto';
 import { Server } from 'socket.io';
@@ -25,7 +25,7 @@ export class MatchmakingService {
 
     private async createMatch(player1Id: string, player2Id: string) {
         try {
-            // Create a 1v1 ranked room in 'waiting' status
+            // Create a ranked room
             const room = await matchesService.createMatchRoom({
                 mode: 'ranked',
                 player1Id,
@@ -36,38 +36,32 @@ export class MatchmakingService {
 
             const fullRoom = await matchesService.getMatchById(room.id);
 
-            logger.info({ roomId: room.id, player1Id, player2Id }, '[MATCHMAKING] Match room created for pair');
+            logger.info({ roomId: room.id, player1Id, player2Id }, '[MATCHMAKING] Match room created');
 
-            // Notify both players to join the waiting room
-            // Emit as per requirements: room:player_joined -> {player2: {username, tier, rating}}
-            // But for matchmaking both are joined at once.
-            
             if (!fullRoom || !fullRoom.player1 || !fullRoom.player2) {
-                throw new Error('Match intel corrupted');
+                throw new Error('Match intel corrupted after creation');
             }
 
-            this.io.to(`user:${player1Id}`).emit('MATCH_FOUND', {
+            const matchData = {
                 roomCode: room.roomCode,
                 roomId: room.id,
+                matchId: room.id,
                 players: [
                     { id: fullRoom.player1.id, username: fullRoom.player1.username, tier: fullRoom.player1.tier, rating: fullRoom.player1.rankRating },
                     { id: fullRoom.player2.id, username: fullRoom.player2.username, tier: fullRoom.player2.tier, rating: fullRoom.player2.rankRating }
                 ],
                 problem: fullRoom.problem
-            });
+            };
 
-            this.io.to(`user:${player2Id}`).emit('MATCH_FOUND', {
-                roomCode: room.roomCode,
-                roomId: room.id,
-                players: [
-                    { id: fullRoom.player1.id, username: fullRoom.player1.username, tier: fullRoom.player1.tier, rating: fullRoom.player1.rankRating },
-                    { id: fullRoom.player2.id, username: fullRoom.player2.username, tier: fullRoom.player2.tier, rating: fullRoom.player2.rankRating }
-                ],
-                problem: fullRoom.problem
-            });
+            // Notify both players
+            this.io.to(`user:${player1Id}`).emit('MATCH_FOUND', matchData);
+            this.io.to(`user:${player2Id}`).emit('MATCH_FOUND', matchData);
+
+            logger.info({ roomId: room.id }, '[MATCHMAKING] MATCH_FOUND emitted to both players');
 
         } catch (err) {
             logger.error({ err }, '[MATCHMAKING] Failed to create match');
+            // Re-queue both players so they can try again
             await matchmakingQueue.addToQueue(player1Id, 1200);
             await matchmakingQueue.addToQueue(player2Id, 1200);
         }

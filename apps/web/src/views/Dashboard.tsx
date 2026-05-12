@@ -105,7 +105,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
         goToArenaMatch, params 
     } = useNav();
     const { isMenuOpen, setIsMenuOpen, isLight, setTheme } = useLayout();
-    const { createRoom, joinRoom } = useMatch();
+    const { createRoom, joinRoom, findMatch: doFindMatch, cancelSearch: doCancelSearch, status: matchStatus, roomId: matchRoomId } = useMatch();
 
     const { updateRating, updateStats } = useAuthStore();
     const { on, emit } = useSocket();
@@ -193,19 +193,21 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
     const startMatchmaking = () => {
         setIsMatchmaking(true);
-        // Socket emit join queue
-        emit('find_match', {});
-        on('MATCH_FOUND', (data: any) => {
-            setIsMatchmaking(false);
-            goToArenaMatch(data.matchId || data.roomId || data.roomCode);
-        });
+        doFindMatch();
     };
 
     const cancelMatchmaking = () => {
         setIsMatchmaking(false);
-        // Socket emit leave queue
-        emit('cancel_search', {});
+        doCancelSearch();
     };
+
+    // Navigate to arena when matchmaking finds a match
+    useEffect(() => {
+        if (isMatchmaking && matchStatus === 'waiting' && matchRoomId) {
+            setIsMatchmaking(false);
+            goToArenaMatch(matchRoomId);
+        }
+    }, [isMatchmaking, matchStatus, matchRoomId, goToArenaMatch]);
 
     const fetchDashboardData = useCallback(async () => {
         setIsLoading(true);

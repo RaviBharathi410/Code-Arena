@@ -31,11 +31,11 @@ import api from '../lib/api';
 // ── Types ────────────────────────────────────────────────────────────────
 import type { Problem as SharedProblem } from '../types';
 
-interface GameProblem extends SharedProblem {
+interface GameProblem extends Omit<SharedProblem, 'constraints' | 'testCases'> {
     timeLimit: number; // in seconds
     initialCode: string;
     examples: { input: string; output: string; explanation?: string }[];
-    constraints: string[];
+    constraints: string | string[];
     testCases: { input: any; expected: any }[];
 }
 
@@ -93,12 +93,13 @@ export const GameSpace: React.FC = () => {
     const { setIsMenuOpen } = useLayout();
     const isPractice = currentPage === 'arena_practice' || navParams.practiceType != null;
 
-    const { connect } = useSocket();
+    const { connect, socket, connected: isSocketConnected } = useSocket();
     const {
-        joinMatch, updateCode: syncCode,
+        createRoom, joinMatch, updateCode: syncCode,
         problem: activeProblem, winner,
         opponentCode: liveOpponentCode, submitCode: socketSubmit,
-        verdict
+        runCode: socketRun,
+        verdict, runVerdict, error: matchError
     } = useMatch();
 
 
@@ -114,6 +115,8 @@ export const GameSpace: React.FC = () => {
     const [showResults, setShowResults] = useState(false);
     const [score, setScore] = useState<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isRunningCode, setIsRunningCode] = useState(false);
+    const [runResultData, setRunResultData] = useState<any>(null);
 
     // Esports features state
     const [signalStrength, setSignalStrength] = useState<'stable' | 'weak' | 'critical'>('stable');
@@ -140,8 +143,28 @@ export const GameSpace: React.FC = () => {
         { id: 'cpp', name: 'C++', icon: 'C++', backendId: 'cpp' },
     ];
 
-    const getTemplate = (langId: string, problemTitle: string) => {
-        const title = problemTitle.replace(/\s+/g, '');
+    const getTemplate = (langId: string, problem: GameProblem) => {
+        const lang = SUPPORTED_LANGUAGES.find(l => l.id === langId) || SUPPORTED_LANGUAGES[0];
+        
+        if (problem && problem.boilerplate) {
+            let template = '';
+            
+            if (Array.isArray(problem.boilerplate)) {
+                // Handle LeetCode style array
+                const snippet = problem.boilerplate.find((s: any) => 
+                    s.langSlug === lang.id || 
+                    s.langSlug === lang.backendId || 
+                    (lang.id === 'python' && (s.langSlug === 'python3' || s.langSlug === 'py'))
+                );
+                if (snippet) template = snippet.code;
+            } else {
+                // Handle dict style
+                const bp = problem.boilerplate as Record<string, string>;
+                template = bp[lang.id] || bp[lang.backendId] || bp[lang.id.replace('javascript', 'js').replace('python', 'py')];
+            }
+            if (template) return template;
+        }
+
         switch (langId) {
             case 'python':
                 return `class Solution:\n    def solve(self):\n        # Write your code here\n        pass\n`;
@@ -156,6 +179,7 @@ export const GameSpace: React.FC = () => {
 
     const timerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Force show problem on load
     useEffect(() => {
@@ -166,12 +190,12 @@ export const GameSpace: React.FC = () => {
     useEffect(() => {
         connect();
 
-        // If we have a matchId in nav params
+        // If we have a matchId in nav params, join the room by ID
         const matchId = navParams.matchId;
         if (matchId) {
-            joinMatch(matchId);
+            joinById(matchId);
         }
-    }, [navParams.matchId, connect, joinMatch]);
+    }, [navParams.matchId, connect, joinById]);
 
     useEffect(() => {
         const problemId = navParams.practiceType || navParams.problemId;
@@ -239,11 +263,13 @@ export const GameSpace: React.FC = () => {
     // Simulated WebRTC Signal Fluctuations
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (showLanguageDropdown) setShowLanguageDropdown(false);
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setShowLanguageDropdown(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showLanguageDropdown]);
+    }, []);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -388,63 +414,147 @@ export const GameSpace: React.FC = () => {
 
     const handleSubmit = useCallback(() => {
         if (isSubmitting || isComplete) return;
+        if (!isSocketConnected) {
+            console.error('Socket not connected');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmissionStatus('running');
+        
+        // Safety timeout: 20s
+        setTimeout(() => {
+            setIsSubmitting(prev => {
+                if (prev) {
+                    console.warn('Submission timed out');
+                    setSubmissionStatus('failed');
+                }
+                return false;
+            });
+        }, 20000);
+
+        const langDef = SUPPORTED_LANGUAGES.find(l => l.id === language) || SUPPORTED_LANGUAGES[0];
 
         // Real submission via socket
-        socketSubmit(code, language);
+        socketSubmit(code, langDef.backendId);
 
         // Mark local as complete
         setIsComplete(true);
-    }, [isSubmitting, isComplete, socketSubmit, code, language]);
+    }, [isSubmitting, isComplete, socketSubmit, code, language, isSocketConnected]);
+
+    const handleRun = useCallback(() => {
+        if (isRunningCode || isSubmitting || isComplete) return;
+        if (!isSocketConnected) {
+            console.error('Socket not connected');
+            return;
+        }
+        
+        setIsRunningCode(true);
+        setRunResultData(null);
+        
+        // Safety timeout: 15s
+        setTimeout(() => {
+            setIsRunningCode(prev => {
+                if (prev) console.warn('Run execution timed out');
+                return false;
+            });
+        }, 15000);
+
+        const langDef = SUPPORTED_LANGUAGES.find(l => l.id === language) || SUPPORTED_LANGUAGES[0];
+        socketRun(code, langDef.backendId);
+    }, [isRunningCode, isSubmitting, isComplete, socketRun, code, language, isSocketConnected]);
+
+    useEffect(() => {
+        if (runVerdict && isRunningCode) {
+            setIsRunningCode(false);
+            setRunResultData(runVerdict);
+        }
+    }, [runVerdict, isRunningCode]);
+
+    // Handle Match Errors to prevent hangs
+    useEffect(() => {
+        if (matchError) {
+            setIsRunningCode(false);
+            setIsSubmitting(false);
+            // Optionally show error to user
+            console.error('Match Error:', matchError);
+        }
+    }, [matchError]);
 
     useEffect(() => {
         if (verdict && isSubmitting) {
-            const isSuccess = verdict.status === 'accepted';
+            const isSuccess = verdict.status?.toLowerCase() === 'accepted';
             setSubmissionStatus(isSuccess ? 'passed' : 'failed');
             setShowScoreImpact(true);
 
-            setTimeout(() => {
-                setIsRunning(false);
-                const timeTaken = isPractice ? timeLeft : (selectedProblem.timeLimit - timeLeft);
-                const timeBonus = isPractice ? 0 : Math.max(0, Math.floor(timeLeft / 10));
-
-                setScore({
-                    accuracy: isSuccess ? 100 : 0,
-                    timeBonus,
-                    rpGain: isSuccess ? 32 : -15,
-                    expectedGain: 18,
-                    streakBonus: isSuccess ? 14 : 0,
-                    timeTaken,
-                    executionTime: verdict.runtime || 0,
-                    memoryMB: verdict.memory ? (verdict.memory / 1024).toFixed(2) : 0,
-                    cpuCycles: '2.4M',
-                    inputSize: '10^4 elements',
-                    percentileSpeed: isSuccess ? 72 : 0,
-                    percentileMemory: isSuccess ? 30 : 0,
-                    benchmarks: { top10Memory: 9.1, globalAvgMemory: 18.4 },
-                    efficiency: isSuccess ? 92 : 0,
-                    complexity: liveComplexity,
-                    heatmap: Array.from({ length: 12 }, () => Math.floor(Math.random() * 100)),
-                    result: isPractice ? (isSuccess ? 'COMPLETED' : 'FAILED') : (isSuccess ? 'VICTORY' : 'DEFEAT')
-                });
-
-                setIsSubmitting(false);
-                setShowResults(true);
-                setShowScoreImpact(false);
-
+            // If it's a practice session, we don't wait for a match:result event
+            if (isPractice) {
                 setTimeout(() => {
-                    const bars = document.querySelectorAll('.benchmark-bar');
-                    if (bars.length > 0) {
-                        gsap.fromTo('.benchmark-bar',
-                            { width: 0 },
-                            { width: (_i, target) => (target as HTMLElement).dataset.width + '%', duration: 1, ease: 'power2.out', stagger: 0.1 }
-                        );
-                    }
-                }, 600);
-            }, 3500);
+                    setIsRunning(false);
+                    const timeTaken = timeLeft;
+
+                    setScore({
+                        accuracy: isSuccess ? 100 : Math.round((verdict.testCasesPass / verdict.testCasesTotal) * 100),
+                        timeBonus: 0,
+                        rpGain: 0,
+                        expectedGain: 0,
+                        streakBonus: 0,
+                        timeTaken,
+                        executionTime: verdict.timeMs || 0,
+                        memoryMB: verdict.memoryKb ? (verdict.memoryKb / 1024).toFixed(2) : 0,
+                        cpuCycles: '2.1M',
+                        inputSize: 'Practice Task',
+                        percentileSpeed: isSuccess ? 85 : 0,
+                        percentileMemory: isSuccess ? 40 : 0,
+                        benchmarks: { top10Memory: 9.1, globalAvgMemory: 18.4 },
+                        efficiency: isSuccess ? 95 : 0,
+                        complexity: verdict.timeComplexity || liveComplexity,
+                        heatmap: Array.from({ length: 12 }, () => Math.floor(Math.random() * 100)),
+                        result: isSuccess ? 'COMPLETED' : 'FAILED'
+                    });
+
+                    setIsSubmitting(false);
+                    setShowResults(true);
+                    setShowScoreImpact(false);
+                }, 2000);
+            }
         }
-    }, [verdict, isSubmitting, isPractice, timeLeft, selectedProblem, liveComplexity]);
+    }, [verdict, isSubmitting, isPractice, timeLeft, liveComplexity]);
+
+    // Handle Match Result (Winner/Defeat)
+    useEffect(() => {
+        if (winner && !isPractice) {
+            setIsRunning(false);
+            setIsSubmitting(false);
+            
+            const isMe = winner.winnerId === (socket as any)?.user?.id;
+            const mySub = (winner.player1Id === (socket as any)?.user?.id) ? winner.p1Sub : winner.p2Sub;
+            const myDelta = (winner.player1Id === (socket as any)?.user?.id) ? winner.deltaP1 : winner.deltaP2;
+
+            setScore({
+                accuracy: mySub?.testCasesPass ? Math.round((mySub.testCasesPass / mySub.testCasesTotal) * 100) : 0,
+                timeBonus: Math.round((mySub?.finalScore || 0) * 0.1),
+                rpGain: myDelta || (isMe ? 32 : -15),
+                expectedGain: 18,
+                streakBonus: isMe ? 12 : 0,
+                timeTaken: mySub?.timeMs ? Math.round(mySub.timeMs / 1000) : 0,
+                executionTime: mySub?.timeMs || 0,
+                memoryMB: mySub?.memoryKb ? (mySub.memoryKb / 1024).toFixed(2) : 0,
+                cpuCycles: '2.4M',
+                inputSize: 'Competition Set',
+                percentileSpeed: isMe ? 78 : 20,
+                percentileMemory: 50,
+                benchmarks: { top10Memory: 8.5, globalAvgMemory: 15.2 },
+                efficiency: isMe ? 92 : 45,
+                complexity: mySub?.timeComplexity || 'O(N)',
+                heatmap: Array.from({ length: 12 }, () => Math.floor(Math.random() * 100)),
+                result: isMe ? 'VICTORY' : 'DEFEAT'
+            });
+
+            setShowResults(true);
+            setShowScoreImpact(false);
+        }
+    }, [winner, isPractice, socket]);
 
     const handleAutoSubmit = useCallback(() => {
         clearInterval(timerRef.current);
@@ -452,12 +562,24 @@ export const GameSpace: React.FC = () => {
     }, [handleSubmit]);
 
     const handleStartMatch = useCallback(() => {
+        if (!isSocketConnected) {
+            console.error('Cannot start: Socket disconnected');
+            connect();
+            return;
+        }
+
         setIsRunning(true);
+        
+        // In practice mode, we create a private room to enable code execution
+        if (isPractice && selectedProblem) {
+            createRoom('practice', selectedProblem.id);
+        }
+
         const container = document.querySelector('.editor-container');
         if (container) {
             gsap.fromTo('.editor-container', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.8 });
         }
-    }, []);
+    }, [isPractice, selectedProblem, createRoom, isSocketConnected, connect]);
 
 
     // Voice Commands
@@ -524,13 +646,17 @@ export const GameSpace: React.FC = () => {
                 {/* Center Status Hub */}
                 <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-4">
                     <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
-                        {signalStrength === 'stable' && <Signal size={14} className="text-green-500" />}
-                        {signalStrength === 'weak' && <SignalLow size={14} className="text-yellow-500" />}
-                        {signalStrength === 'critical' && <WifiOff size={14} className="text-red-500" />}
-                        <span className="text-[10px] font-mono opacity-50 uppercase">{signalStrength}</span>
+                        {isSocketConnected ? (
+                            <Signal size={14} className="text-green-500" />
+                        ) : (
+                            <WifiOff size={14} className="text-red-500" />
+                        )}
+                        <span className={`text-[10px] font-mono uppercase ${isSocketConnected ? 'text-green-500/70' : 'text-red-500/70'}`}>
+                            {isSocketConnected ? 'Stable Link' : 'Disconnected'}
+                        </span>
                     </div>
 
-                    <div className="relative group">
+                    <div className="relative group" ref={dropdownRef}>
                         <button
                             onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
                             className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
@@ -545,13 +671,19 @@ export const GameSpace: React.FC = () => {
                                     <button
                                         key={lang.id}
                                         onClick={() => {
-                                            const oldTemplate = getTemplate(language, selectedProblem.title);
+                                            const oldTemplate = getTemplate(language, selectedProblem);
                                             const isDefault = code.trim() === '' || code.trim() === oldTemplate.trim();
                                             
-                                            setLanguage(lang.id);
-                                            if (isDefault) {
-                                                setCode(getTemplate(lang.id, selectedProblem.title));
+                                            if (!isDefault) {
+                                                const confirmSwitch = window.confirm('Changing language will discard your current code. Are you sure?');
+                                                if (!confirmSwitch) {
+                                                    setShowLanguageDropdown(false);
+                                                    return;
+                                                }
                                             }
+                                            
+                                            setLanguage(lang.id);
+                                            setCode(getTemplate(lang.id, selectedProblem));
                                             setShowLanguageDropdown(false);
                                         }}
                                         className={`w-full px-4 py-2 text-left text-xs font-bold hover:bg-white/5 transition-colors ${language === lang.id ? 'text-accent-secondary' : 'text-zinc-400'}`}
@@ -573,7 +705,7 @@ export const GameSpace: React.FC = () => {
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
                         <Terminal size={14} className={submissionStatus === 'passed' ? 'text-green-500' : 'text-gray-500'} />
                         <span className={`text-[10px] font-mono uppercase ${submissionStatus === 'running' ? 'animate-pulse text-yellow-500' : ''}`}>
-                            {submissionStatus === 'idle' ? 'Ready' : submissionStatus}
+                            {isSocketConnected ? (submissionStatus === 'idle' ? 'Ready' : submissionStatus) : 'Offline'}
                         </span>
                     </div>
                 </div>
@@ -634,11 +766,14 @@ export const GameSpace: React.FC = () => {
                                 )}
                             </div>
                             <button
-                                onClick={() => {
-                                    const selectedLang = SUPPORTED_LANGUAGES.find(l => l.id === language);
-                                    submitCode(code, selectedLang?.backendId || 'js');
-                                    setIsSubmitting(true);
-                                }}
+                                onClick={handleRun}
+                                className={`flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/10 text-white font-black uppercase text-xs tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl ${isRunningCode ? 'opacity-50 pointer-events-none' : ''}`}
+                            >
+                                <Zap size={14} />
+                                {isRunningCode ? 'Running...' : 'Run Code'}
+                            </button>
+                            <button
+                                onClick={handleSubmit}
                                 className={`flex items-center gap-2 px-8 py-3 rounded-2xl bg-accent-primary text-black font-black uppercase text-xs tracking-widest transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(124,58,237,0.3)] ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <Zap size={14} />
@@ -691,9 +826,9 @@ export const GameSpace: React.FC = () => {
                                     {(Array.isArray(selectedProblem.constraints) 
                                         ? selectedProblem.constraints 
                                         : (typeof selectedProblem.constraints === 'string' 
-                                            ? selectedProblem.constraints.split('\n').flatMap(s => s.split(', ')) 
+                                            ? selectedProblem.constraints.split('\n').flatMap((s: string) => s.split(', ')) 
                                             : [])
-                                    ).map((c, i) => (
+                                    ).map((c: string, i: number) => (
                                         <div key={i} className="flex gap-4 items-center group/c">
                                             <div className="w-1.5 h-1.5 rounded-full bg-accent-secondary opacity-60 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
                                             <code className="text-white text-sm font-medium font-mono tracking-tight">{c}</code>
@@ -730,10 +865,42 @@ export const GameSpace: React.FC = () => {
                                 glyphMargin: false,
                                 folding: true,
                                 lineDecorationsWidth: 10,
-                                lineNumbersMinChars: 3
+                                lineNumbersMinChars: 3,
+                                autoClosingBrackets: 'always',
+                                autoIndent: 'full',
+                                formatOnPaste: true,
+                                formatOnType: true
                             }}
                         />
                     </div>
+
+                    {/* Run Result Panel */}
+                    {runResultData && (
+                        <div className="absolute bottom-10 right-10 z-30 p-6 rounded-3xl bg-black border border-white/20 shadow-2xl animate-in slide-in-from-bottom-5 duration-500 w-80">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className={`flex items-center gap-2 ${runResultData.status === 'accepted' ? 'text-green-500' : 'text-red-500'}`}>
+                                    <Zap size={16} fill="currentColor" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">
+                                        Run: {runResultData.status}
+                                    </span>
+                                </div>
+                                <button onClick={() => setRunResultData(null)} className="text-gray-500 hover:text-white transition-colors">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <div className="space-y-2 font-mono">
+                                <div className="text-xs text-gray-300">
+                                    Passed {runResultData.testCasesPass ?? 0} / {runResultData.testCasesTotal ?? 0} testcases
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                    Time: {runResultData.timeMs}ms
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                    Memory: {runResultData.memoryKb ? (runResultData.memoryKb / 1024).toFixed(1) : 0} MB
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Score Impact Toast */}
                     {showScoreImpact && (

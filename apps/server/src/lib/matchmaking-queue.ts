@@ -1,118 +1,84 @@
-import { redis } from './redis';
+import { redis, isRedisReady } from './redis';
 import { logger } from './logger';
 
 const QUEUE_KEY = 'arena:queue';
-const ELO_RANGE_INITIAL = 200; // Match players within ±200 Elo
+const ELO_RANGE = 400; // Match within ±400 Elo; force-pair any two after timeout
 
-export interface QueuedPlayer {
-    userId: string;
-    eloRating: number;
-}
+export interface QueuedPlayer { userId: string; eloRating: number; joinedAt: number; }
+export interface MatchPair { player1Id: string; player2Id: string; }
 
-export interface MatchPair {
-    player1Id: string;
-    player2Id: string;
-}
-
-/**
- * MatchmakingQueue — Redis sorted set-backed matchmaking.
- *
- * Players are stored in a sorted set keyed by Elo rating.
- * A background polling loop runs every 500ms to pair players.
- */
 export class MatchmakingQueue {
     private pollingInterval: NodeJS.Timeout | null = null;
     private onMatchFound: ((pair: MatchPair) => void) | null = null;
+    // In-memory fallback when Redis is unavailable
+    private memQueue: Map<string, { elo: number; joinedAt: number }> = new Map();
 
-    /**
-     * Register a callback that fires when two players are paired.
-     */
-    onMatch(callback: (pair: MatchPair) => void) {
-        this.onMatchFound = callback;
-    }
+    onMatch(callback: (pair: MatchPair) => void) { this.onMatchFound = callback; }
 
-    /**
-     * Add a player to the matchmaking queue.
-     * Uses ZADD with their Elo rating as the score.
-     */
     async addToQueue(userId: string, eloRating: number): Promise<void> {
-        await redis.zadd(QUEUE_KEY, eloRating, userId);
-        logger.info({ userId, eloRating }, '[MATCHMAKING] Player added to queue');
+        this.memQueue.set(userId, { elo: eloRating, joinedAt: Date.now() });
+        if (isRedisReady()) {
+            await redis.zadd(QUEUE_KEY, eloRating, userId);
+        }
+        logger.info({ userId, eloRating, redisAvailable: isRedisReady() }, '[MATCHMAKING] Player added to queue');
     }
 
-    /**
-     * Remove a player from the queue (cancel search / disconnect).
-     */
     async removeFromQueue(userId: string): Promise<void> {
-        await redis.zrem(QUEUE_KEY, userId);
+        this.memQueue.delete(userId);
+        if (isRedisReady()) {
+            await redis.zrem(QUEUE_KEY, userId);
+        }
         logger.info({ userId }, '[MATCHMAKING] Player removed from queue');
     }
 
-    /**
-     * Get the current queue depth.
-     */
     async getQueueSize(): Promise<number> {
-        const size = await redis.zcard(QUEUE_KEY);
-        return size || 0;
+        return this.memQueue.size;
     }
 
-    /**
-     * Attempt to pair two players within the Elo range.
-     * Uses ZPOPMIN to atomically grab the lowest-rated player,
-     * then searches for a valid opponent.
-     */
-    async tryPairPlayers(): Promise<MatchPair | null> {
-        // Get all queued players sorted by Elo (ascending)
-        const members = await redis.zrange(QUEUE_KEY, 0, -1, 'WITHSCORES');
+    private tryPairFromMemory(): MatchPair | null {
+        if (this.memQueue.size < 2) return null;
 
-        if (!members || members.length < 4) {
-            // Need at least 2 players (each has userId + score = 4 entries)
-            return null;
-        }
+        const players = Array.from(this.memQueue.entries())
+            .map(([userId, { elo, joinedAt }]) => ({ userId, eloRating: elo, joinedAt }))
+            .sort((a, b) => a.eloRating - b.eloRating);
 
-        // Parse into player objects: [userId, score, userId, score, ...]
-        const players: QueuedPlayer[] = [];
-        for (let i = 0; i < members.length; i += 2) {
-            players.push({
-                userId: members[i],
-                eloRating: parseInt(members[i + 1], 10),
-            });
-        }
+        const now = Date.now();
 
-        // Find the first valid pair within Elo range
         for (let i = 0; i < players.length - 1; i++) {
             for (let j = i + 1; j < players.length; j++) {
                 const eloDiff = Math.abs(players[i].eloRating - players[j].eloRating);
-                if (eloDiff <= ELO_RANGE_INITIAL) {
-                    // Atomically remove both from queue
-                    const multi = redis.multi();
-                    multi.zrem(QUEUE_KEY, players[i].userId);
-                    multi.zrem(QUEUE_KEY, players[j].userId);
-                    const results = await multi.exec();
+                // Expand range for players waiting > 30 seconds
+                const waitTime = Math.max(now - players[i].joinedAt, now - players[j].joinedAt);
+                const effectiveRange = ELO_RANGE + Math.floor(waitTime / 5000) * 100;
 
-                    // Verify both were actually removed (prevents race conditions)
-                    if (results && results[0][1] === 1 && results[1][1] === 1) {
-                        const pair: MatchPair = {
-                            player1Id: players[i].userId,
-                            player2Id: players[j].userId,
-                        };
-                        logger.info(pair, '[MATCHMAKING] Players paired');
-                        return pair;
-                    }
+                if (eloDiff <= effectiveRange) {
+                    this.memQueue.delete(players[i].userId);
+                    this.memQueue.delete(players[j].userId);
+                    const pair = { player1Id: players[i].userId, player2Id: players[j].userId };
+                    logger.info(pair, '[MATCHMAKING] Players paired (in-memory)');
+                    return pair;
                 }
             }
         }
-
         return null;
     }
 
-    /**
-     * Start the background polling loop (every 500ms).
-     * Continuously attempts to pair players in the queue.
-     */
-    startPolling(): void {
-        if (this.pollingInterval) return; // Already running
+    async tryPairPlayers(): Promise<MatchPair | null> {
+        // Always try in-memory first (it's the single source of truth now)
+        const pair = this.tryPairFromMemory();
+        if (pair) {
+            // Also remove from Redis if available
+            if (isRedisReady()) {
+                await redis.zrem(QUEUE_KEY, pair.player1Id);
+                await redis.zrem(QUEUE_KEY, pair.player2Id);
+            }
+            return pair;
+        }
+        return null;
+    }
 
+    startPolling(): void {
+        if (this.pollingInterval) return;
         this.pollingInterval = setInterval(async () => {
             try {
                 const pair = await this.tryPairPlayers();
@@ -123,18 +89,13 @@ export class MatchmakingQueue {
                 logger.error({ err }, '[MATCHMAKING] Polling error');
             }
         }, 500);
-
         logger.info('[MATCHMAKING] Background polling started (500ms interval)');
     }
 
-    /**
-     * Stop the background polling loop.
-     */
     stopPolling(): void {
         if (this.pollingInterval) {
             clearInterval(this.pollingInterval);
             this.pollingInterval = null;
-            logger.info('[MATCHMAKING] Background polling stopped');
         }
     }
 }
