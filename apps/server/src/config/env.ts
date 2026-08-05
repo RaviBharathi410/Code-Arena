@@ -16,6 +16,7 @@ const envSchema = z.object({
     CORS_ORIGIN: z.string().min(1).default('http://localhost:5173'),
     JUDGE0_API_URL: z.string().url(),
     JUDGE0_API_KEY: z.string().min(1),
+    USE_JUDGE0_MOCK: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(false),
     BCRYPT_ROUNDS: z.coerce.number().default(12),
 });
 

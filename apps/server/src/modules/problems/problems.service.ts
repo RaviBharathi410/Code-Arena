@@ -1,6 +1,4 @@
-import { db } from '../../db';
-import { problems } from '@arena/database';
-import { eq, and, sql, or, ilike } from 'drizzle-orm';
+import { Problem } from '../../models/Problem';
 
 export class ProblemsService {
     async findAll(options: {
@@ -14,43 +12,28 @@ export class ProblemsService {
         const limit = Math.min(options.limit || 20, 100);
         const offset = options.offset || 0;
 
-        const filters = [];
-        if (options.difficulty) filters.push(eq(problems.difficulty, options.difficulty.toUpperCase()));
-        if (options.category) filters.push(eq(problems.category, options.category));
-        if (options.search) filters.push(or(ilike(problems.title, `%${options.search}%`), ilike(problems.slug, `%${options.search}%`)));
+        const query: any = {};
+        if (options.difficulty) query.difficulty = options.difficulty.toUpperCase();
+        if (options.category) query.category = options.category;
+        if (options.search) {
+            query.$or = [
+                { title: { $regex: options.search, $options: 'i' } },
+                { slug: { $regex: options.search, $options: 'i' } }
+            ];
+        }
         
-        // Filtering by tags (Postgres array)
         if (options.tag) {
-            filters.push(sql`${problems.tags} @> ARRAY[${options.tag}]::text[]`);
+            query.tags = options.tag;
         }
 
-        const whereClause = filters.length > 0 ? and(...filters) : undefined;
-
-        const [totalCount] = await db.select({ value: sql<number>`count(*)` })
-            .from(problems)
-            .where(whereClause);
-
-        const data = await db.select({
-            id: problems.id,
-            slug: problems.slug,
-            title: problems.title,
-            difficulty: problems.difficulty,
-            category: problems.category,
-            description: problems.description,
-            constraints: problems.constraints,
-            examples: problems.examples,
-            optimalTimeComplexity: problems.optimalTimeComplexity,
-            optimalSpaceComplexity: problems.optimalSpaceComplexity,
-            tags: problems.tags,
-            createdAt: problems.createdAt,
-        })
-            .from(problems)
-            .where(whereClause)
+        const totalCount = await Problem.countDocuments(query);
+        const data = await Problem.find(query)
             .limit(limit)
-            .offset(offset);
+            .skip(offset)
+            .lean();
 
         return {
-            total: Number(totalCount?.value || 0),
+            total: totalCount,
             limit,
             offset,
             data
@@ -58,10 +41,9 @@ export class ProblemsService {
     }
 
     async getProblemBySlug(slug: string) {
-        const [problem] = await db.select()
-            .from(problems)
-            .where(or(eq(problems.slug, slug), eq(problems.id, slug)))
-            .limit(1);
+        const problem = await Problem.findOne({
+            $or: [{ slug }, { _id: slug }] // Note: this assumes slug might be an objectId, but it's safe-ish
+        }).lean();
 
         if (!problem) {
             throw new Error('Problem not found');
@@ -70,10 +52,7 @@ export class ProblemsService {
     }
 
     async getProblemById(id: string) {
-        const [problem] = await db.select()
-            .from(problems)
-            .where(eq(problems.id, id))
-            .limit(1);
+        const problem = await Problem.findById(id).lean();
 
         if (!problem) {
             throw new Error('Problem not found');
@@ -82,15 +61,13 @@ export class ProblemsService {
     }
 
     async getRandomProblem(difficulty?: string) {
-        const whereClause = difficulty
-            ? eq(problems.difficulty, difficulty.toUpperCase())
-            : undefined;
+        const query: any = {};
+        if (difficulty) query.difficulty = difficulty.toUpperCase();
 
-        const [problem] = await db.select()
-            .from(problems)
-            .where(whereClause)
-            .orderBy(sql`RANDOM()`)
-            .limit(1);
+        const [problem] = await Problem.aggregate([
+            { $match: query },
+            { $sample: { size: 1 } }
+        ]);
 
         if (!problem) throw new Error('No problems found');
         return problem;

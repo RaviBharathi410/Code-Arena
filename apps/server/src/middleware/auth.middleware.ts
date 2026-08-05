@@ -14,6 +14,8 @@ export interface AuthRequest extends Request {
  * Middleware: Require a valid JWT access token.
  * Attaches decoded user payload to `req.user`.
  */
+
+
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
@@ -23,21 +25,13 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
     const token = header.slice(7);
     try {
         const payload = jwt.verify(token, env.JWT_SECRET) as any;
-
-        if (payload.type !== 'access') {
-            throw new Error('Wrong token type');
-        }
-
         req.user = {
             id: payload.sub,
-            username: payload.username,
-            role: payload.role || 'player',
+            username: payload.username || 'operator',
+            role: payload.role || 'user',
         };
         next();
     } catch (err: any) {
-        if (err.name === 'TokenExpiredError') {
-            return res.status(401).json({ error: 'Token expired' });
-        }
         return res.status(401).json({ error: 'Invalid token' });
     }
 };

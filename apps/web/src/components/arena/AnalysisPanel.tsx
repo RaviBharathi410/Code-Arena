@@ -64,7 +64,7 @@ export const AnalysisPanel: React.FC = () => {
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rival Uplink</span>
                     </div>
                     <div className="flex items-center gap-3">
-                        {opponentSpeaking ? <VoiceVisualizer isActive={true} size="sm" color="#ef4444" /> : <MicOff size={12} className="text-gray-700" />}
+                        {opponentSpeaking ? <VoiceVisualizer isActive={true} color="#ef4444" /> : <MicOff size={12} className="text-gray-700" />}
                         <div className={`px-2 py-0.5 rounded-full text-[8px] font-black border ${
                             opponentSubmissionStatus === 'ACCEPTED' ? 'bg-green-500/10 border-green-500/30 text-green-500' :
                             opponentSubmissionStatus === 'SUBMITTED' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 animate-pulse' :
@@ -74,7 +74,7 @@ export const AnalysisPanel: React.FC = () => {
                         </div>
                     </div>
                 </div>
-
+ 
                 <div className="p-8 flex-1 space-y-10">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-red-500/20 to-purple-600/20 border border-white/10 flex items-center justify-center text-red-500 font-black text-2xl shadow-xl relative overflow-hidden group">
@@ -83,7 +83,7 @@ export const AnalysisPanel: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                             <h4 className="text-xl font-black tracking-tighter uppercase text-white">{opponent?.username || 'ANONYMOUS'}</h4>
-                            <p className="text-[9px] font-black text-accent-secondary uppercase tracking-[0.2em]">{opponent?.tier || 'UNKNOWN TIER'} • {opponent?.rating || 0} RP</p>
+                            <p className="text-[9px] font-black text-accent-secondary uppercase tracking-[0.2em]">{opponent?.tier || 'UNKNOWN TIER'} • {opponent?.rankRating || 0} RP</p>
                         </div>
                     </div>
 

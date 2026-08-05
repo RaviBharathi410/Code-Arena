@@ -5,9 +5,7 @@ import { matchesService } from '../modules/matches/matches.service';
 import { submissionsService } from '../modules/submissions/submissions.service';
 import { logger } from '../lib/logger';
 import { redis } from '../lib/redis';
-import { db } from '../db';
-import { users, matchRooms } from '@arena/database';
-import { eq } from 'drizzle-orm';
+import { User } from '../models/User';
 
 export class BattleHandler {
     private matchmaking: MatchmakingService;
@@ -45,14 +43,14 @@ export class BattleHandler {
             socket.join(room.id);
             socket.data.roomId = room.id;
 
-            const user = await db.query.users.findFirst({ where: eq(users.id, socket.user!.id) });
+            const user = await User.findById(socket.user!.id).lean();
             const fullRoom = await matchesService.getMatchById(room.id);
             if (!fullRoom) throw new Error('Room intel corrupted');
 
             socket.emit('room:initial_data', {
                 roomId: room.id,
                 roomCode: room.roomCode,
-                players: [{ id: socket.user!.id, username: socket.user!.username, tier: user?.tier || 'BRONZE', rating: user?.rankRating || 1200 }],
+                players: [{ id: socket.user!.id, username: socket.user!.username, tier: (user as any)?.tier || 'BRONZE', rating: (user as any)?.rankRating || 1200 }],
                 problem: fullRoom.problem
             });
 
@@ -77,11 +75,11 @@ export class BattleHandler {
             if (!fullRoom) throw new Error('Room intel corrupted');
 
             const isP1 = room.player1Id === socket.user!.id;
-            const user = await db.query.users.findFirst({ where: eq(users.id, socket.user!.id) });
+            const user = await User.findById(socket.user!.id).lean();
 
             // Notify existing player
             socket.to(room.id).emit('room:player_joined', {
-                player: { id: socket.user!.id, username: socket.user!.username, tier: user?.tier || 'BRONZE', rating: user?.rankRating || 1200 }
+                player: { id: socket.user!.id, username: socket.user!.username, tier: (user as any)?.tier || 'BRONZE', rating: (user as any)?.rankRating || 1200 }
             });
 
             socket.emit('room:initial_data', {
@@ -226,9 +224,9 @@ export class BattleHandler {
 
     private async handleFindMatch(socket: CustomSocket) {
         if (!socket.user) return;
-        const user = await db.query.users.findFirst({ where: eq(users.id, socket.user.id) });
-        logger.info({ userId: socket.user.id, elo: user?.rankRating }, '[SOCKET] Player searching for match');
-        await this.matchmaking.findMatch(socket.user.id, user?.rankRating || 1200);
+        const user = await User.findById(socket.user.id).lean();
+        logger.info({ userId: socket.user.id, elo: (user as any)?.rankRating }, '[SOCKET] Player searching for match');
+        await this.matchmaking.findMatch(socket.user.id, (user as any)?.rankRating || 1200);
     }
 
     private async handleCancelSearch(socket: CustomSocket) {

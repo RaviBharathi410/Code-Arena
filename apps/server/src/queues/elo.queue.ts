@@ -1,8 +1,6 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { bullmqConnection } from './connection';
-import { db } from '../db';
-import { users } from '@arena/database';
-import { eq } from 'drizzle-orm';
+import { User } from '../models/User';
 import { leaderboard } from '../lib/leaderboard';
 import { logger } from '../lib/logger';
 import { createBullMQRedisClient } from '../lib/redis';
@@ -80,12 +78,8 @@ export const eloWorker = new Worker<EloJobData>(
         logger.info({ matchId, winnerId, loserId, jobId: job.id }, '[QUEUE:ELO] Processing Elo update');
 
         // 1. Fetch both players
-        const winner = await db.query.users.findFirst({
-            where: eq(users.id, winnerId),
-        });
-        const loser = await db.query.users.findFirst({
-            where: eq(users.id, loserId),
-        });
+        const winner = await User.findById(winnerId).lean();
+        const loser = await User.findById(loserId).lean();
 
         if (!winner || !loser) {
             throw new Error(`Players not found: winner=${winnerId}, loser=${loserId}`);
@@ -95,33 +89,27 @@ export const eloWorker = new Worker<EloJobData>(
         const winnerGames = (winner.wins || 0) + (winner.losses || 0);
         const loserGames = (loser.wins || 0) + (loser.losses || 0);
         const { winnerGain, loserLoss } = calculateEloChange(
-            winner.eloRating,
-            loser.eloRating,
+            winner.rankRating,
+            loser.rankRating,
             winnerGames,
             loserGames,
             timeLimit,
             timeTaken
         );
 
-        const newWinnerElo = winner.eloRating + winnerGain;
-        const newLoserElo = Math.max(0, loser.eloRating + loserLoss); // Floor at 0
+        const newWinnerElo = winner.rankRating + winnerGain;
+        const newLoserElo = Math.max(0, loser.rankRating + loserLoss); // Floor at 0
 
-        // 3. Update PostgreSQL
-        await db.update(users)
-            .set({
-                eloRating: newWinnerElo,
-                wins: (winner.wins || 0) + 1,
-                updatedAt: new Date(),
-            })
-            .where(eq(users.id, winnerId));
+        // 3. Update MongoDB
+        await User.updateOne(
+            { _id: winnerId },
+            { $set: { rankRating: newWinnerElo, wins: (winner.wins || 0) + 1 } }
+        );
 
-        await db.update(users)
-            .set({
-                eloRating: newLoserElo,
-                losses: (loser.losses || 0) + 1,
-                updatedAt: new Date(),
-            })
-            .where(eq(users.id, loserId));
+        await User.updateOne(
+            { _id: loserId },
+            { $set: { rankRating: newLoserElo, losses: (loser.losses || 0) + 1 } }
+        );
 
         // 4. Update Redis leaderboard sorted set
         await leaderboard.updateRating(winnerId, newWinnerElo);
@@ -140,8 +128,8 @@ export const eloWorker = new Worker<EloJobData>(
 
         logger.info({
             matchId,
-            winner: { id: winnerId, elo: `${winner.eloRating} → ${newWinnerElo} (+${winnerGain})` },
-            loser: { id: loserId, elo: `${loser.eloRating} → ${newLoserElo} (${loserLoss})` },
+            winner: { id: winnerId, elo: `${winner.rankRating} → ${newWinnerElo} (+${winnerGain})` },
+            loser: { id: loserId, elo: `${loser.rankRating} → ${newLoserElo} (${loserLoss})` },
         }, '[QUEUE:ELO] Elo update complete');
 
         return { newWinnerElo, newLoserElo, winnerGain, loserLoss };

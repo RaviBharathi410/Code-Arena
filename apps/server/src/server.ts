@@ -7,8 +7,15 @@ import { config } from './config';
 import { env } from './config/env';
 import { logger } from './lib/logger';
 import { setCodeQueueIO, setEloQueueIO, codeExecutionWorker, eloWorker, analyticsWorker } from './queues';
+import { connectDB } from './config/db';
+console.log("===== SERVER.TS LOADED =====");
+const startServer = async () => {
+    logger.info('[MongoDB] Connecting...');
+    console.log("===== BEFORE connectDB =====");
+    await connectDB();
+    console.log("===== AFTER connectDB =====");
+    logger.info('[MongoDB] Database ready.');
 
-const startServer = () => {
     const app = createApp();
     const httpServer = createServer(app);
 
@@ -21,7 +28,7 @@ const startServer = () => {
         maxHttpBufferSize: 5e4, // 50 KB max payload size to prevent DoS
     });
 
-    setupSocket(io);
+    await setupSocket(io);
 
     // ── BullMQ: Wire Socket.IO into queue workers ─────────────────────────
     // This lets workers emit real-time events after processing jobs.
@@ -68,4 +75,7 @@ const startServer = () => {
     return httpServer;
 };
 
-startServer();
+startServer().catch((err) => {
+    logger.fatal({ err }, '[ARENA] Failed to start server');
+    process.exit(1);
+});

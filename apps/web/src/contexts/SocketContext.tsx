@@ -11,18 +11,23 @@ interface SocketContextType {
     connect: () => void;
 }
 
-const SocketContext = createContext<SocketContextType | undefined>(undefined);
+export const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [socket, setSocket] = useState<Socket | null>(null);
+    const socketRef = useRef<Socket | null>(null);
     const [connected, setConnected] = useState(false);
 
-    const { token } = useAuthStore();
+    const token = useAuthStore((state) => state.token);
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
     useEffect(() => {
-        if (!token) {
+        // Do NOT connect if unauthenticated or token missing
+        if (!isAuthenticated || !token) {
             setConnected(false);
-            setSocket(null);
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+            }
             return;
         }
 
@@ -47,46 +52,42 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         s.on('connect_error', (err) => {
             console.error('[SOCKET] Connection Error:', err.message);
             setConnected(false);
+            // If auth error, trigger full logout to clear bad token
+            if (err.message.includes('Authentication error') || err.message.includes('Invalid token')) {
+                useAuthStore.getState().logout();
+            }
         });
 
-        setSocket(s);
+        socketRef.current = s;
  
         return () => {
             s.disconnect();
+            socketRef.current = null;
         };
-    }, [token]);
+    }, [isAuthenticated, token]);
 
     const connect = useCallback(() => {
-        socket?.connect();
-    }, [socket]);
+        socketRef.current?.connect();
+    }, []);
 
     const emit = useCallback((event: string, data?: any) => {
-        socket?.emit(event, data);
-    }, [socket]);
+        socketRef.current?.emit(event, data);
+    }, []);
 
     const on = useCallback((event: string, callback: (...args: any[]) => void) => {
-        if (socket) {
-            socket.on(event, callback);
-        }
-        
+        socketRef.current?.on(event, callback);
         return () => {
-            socket?.off(event, callback);
+            socketRef.current?.off(event, callback);
         };
-    }, [socket]);
+    }, []);
 
-    const value = {
-        socket,
+    const value = React.useMemo(() => ({
+        socket: socketRef.current,
         connected,
         emit,
         on,
         connect
-    };
+    }), [connected, emit, on, connect]);
 
     return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
-};
-
-export const useSocket = () => {
-    const context = useContext(SocketContext);
-    if (!context) throw new Error('useSocket must be used within a SocketProvider');
-    return context;
 };

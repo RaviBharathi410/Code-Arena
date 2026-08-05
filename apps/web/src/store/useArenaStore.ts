@@ -1,20 +1,40 @@
 import { create } from 'zustand';
-import type { Problem, Tournament, LeaderboardEntry, AsyncStatus } from '../types';
+import type { Problem, LeaderboardEntry, AsyncStatus } from '../types';
+
+export interface Tournament {
+    id: string;
+    title: string;
+    status: string;
+    startTime: string;
+    tier: string;
+    prizePool: string;
+    maxPlayers: number;
+}
 
 const OFFLINE_PROBLEMS: Problem[] = [
     {
         id: 'p1',
         title: 'Two Sum',
-        difficulty: 'Easy',
+        slug: 'two-sum',
+        difficulty: 'EASY',
+        category: 'Algorithms',
         description: 'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.',
+        constraints: 'None',
         examples: [{ input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' }],
+        testCases: [],
+        boilerplate: {},
     },
     {
         id: 'p2',
         title: 'Longest Substring Without Repeating Characters',
-        difficulty: 'Medium',
+        slug: 'longest-substring',
+        difficulty: 'MEDIUM',
+        category: 'Algorithms',
         description: 'Given a string s, find the length of the longest substring without repeating characters.',
+        constraints: 'None',
         examples: [{ input: 's = "abcabcbb"', output: '3' }],
+        testCases: [],
+        boilerplate: {},
     },
 ];
 
@@ -31,9 +51,9 @@ const OFFLINE_TOURNAMENTS: Tournament[] = [
 ];
 
 const OFFLINE_LEADERBOARD: LeaderboardEntry[] = [
-    { rank: 1, userId: 'm1', username: 'Ghost_Runner_32', rating: 4820, wins: 312, winRate: 79.6 },
-    { rank: 2, userId: 'm2', username: 'NeonShadow_X', rating: 4611, wins: 289, winRate: 75.2 },
-    { rank: 3, userId: 'm3', username: 'CipherKnight', rating: 4430, wins: 261, winRate: 71.3 },
+    { rank: 1, userId: 'm1', username: 'Ghost_Runner_32', rankRating: 4820, wins: 312, winRate: 79.6, tier: 'OPERATOR' },
+    { rank: 2, userId: 'm2', username: 'NeonShadow_X', rankRating: 4611, wins: 289, winRate: 75.2, tier: 'DIAMOND' },
+    { rank: 3, userId: 'm3', username: 'CipherKnight', rankRating: 4430, wins: 261, winRate: 71.3, tier: 'DIAMOND' },
 ];
 
 interface ArenaState {

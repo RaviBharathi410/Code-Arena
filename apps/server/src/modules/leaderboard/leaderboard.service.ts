@@ -1,6 +1,4 @@
-import { db } from '../../db';
-import { users } from '@arena/database';
-import { desc, eq, sql } from 'drizzle-orm';
+import { User } from '../../models/User';
 import { redis } from '../../lib/redis';
 import { leaderboard as redisLeaderboard } from '../../lib/leaderboard';
 import { logger } from '../../lib/logger';
@@ -26,22 +24,25 @@ export class LeaderboardService {
             logger.warn({ err }, '[LEADERBOARD] Redis read failed, falling back to PostgreSQL');
         }
 
-        // Fallback: query PostgreSQL with rank window function
-        // Note: uses eloRating (renamed from elo in Phase 1 schema migration)
-        const data = await db
-            .select({
-                id: users.id,
-                username: users.username,
-                rankRating: users.rankRating,
-                wins: users.wins,
-                losses: users.losses,
-                avatarUrl: users.avatarUrl,
-                rank: sql<number>`rank() OVER (ORDER BY ${users.rankRating} DESC)`
-            })
-            .from(users)
-            .orderBy(desc(users.rankRating))
+        // Note: uses rankRating (renamed from elo in Phase 1 schema migration)
+        const users = await User.find()
+            .select('username rankRating wins losses avatarUrl')
+            .sort({ rankRating: -1 })
             .limit(limit)
-            .offset(offset);
+            .skip(offset)
+            .lean();
+
+        // Calculate rank in JS since Mongoose doesn't have an exact window function
+        let rankCounter = offset + 1;
+        const data = users.map(u => ({
+            id: u._id,
+            username: u.username,
+            rankRating: u.rankRating,
+            wins: u.wins,
+            losses: u.losses,
+            avatarUrl: (u as any).avatarUrl,
+            rank: rankCounter++
+        }));
 
         // Backfill the Redis leaderboard from DB results
         try {
@@ -62,36 +63,29 @@ export class LeaderboardService {
             const rank = await redisLeaderboard.getRank(userId);
             const elo = await redisLeaderboard.getPlayerElo(userId);
             if (rank !== null && elo !== null) {
-                // Still need username/wins/losses from DB
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, userId),
-                    columns: { id: true, username: true, rankRating: true, wins: true, losses: true },
-                });
+                const user = await User.findById(userId).select('username rankRating wins losses').lean();
                 if (user) {
-                    return { ...user, rank };
+                    return { id: user._id, username: user.username, rankRating: user.rankRating, wins: user.wins, losses: user.losses, rank };
                 }
             }
         } catch (err) {
-            logger.warn({ err }, '[LEADERBOARD] Redis rank lookup failed, falling back to PostgreSQL');
+            logger.warn({ err }, '[LEADERBOARD] Redis rank lookup failed, falling back to MongoDB');
         }
 
-        // Fallback: CTE-based rank query in PostgreSQL
-        const result = await db.execute(sql`
-            WITH RankedUsers AS (
-                SELECT 
-                    id, 
-                    username, 
-                    rank_rating, 
-                    wins, 
-                    losses, 
-                    rank() OVER (ORDER BY rank_rating DESC) as rank
-                FROM users
-            )
-            SELECT * FROM RankedUsers WHERE id = ${userId}
-        `);
+        // Fallback: count users with a higher rankRating
+        const user = await User.findById(userId).lean();
+        if (!user) throw new Error('User not found');
 
-        if (!result || result.length === 0) throw new Error('User not found');
-        return result[0];
+        const higherRankCount = await User.countDocuments({ rankRating: { $gt: user.rankRating } });
+        
+        return {
+            id: user._id,
+            username: user.username,
+            rankRating: user.rankRating,
+            wins: user.wins,
+            losses: user.losses,
+            rank: higherRankCount + 1
+        };
     }
 
     /**

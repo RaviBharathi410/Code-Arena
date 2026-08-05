@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import { useSocket } from './SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import type { Problem, MatchStatus, User, MatchResult } from '../types';
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -232,6 +232,7 @@ export const useMatch = () => {
     
     return {
         ...context.state,
+        state: context.state,
         createRoom: context.createRoom,
         joinMatch: context.joinRoom,
         joinById: context.joinById,

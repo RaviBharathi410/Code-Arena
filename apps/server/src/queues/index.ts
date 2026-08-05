@@ -1,7 +1,7 @@
 /**
  * Queue barrel export — exposes all queues, workers, and job types.
  */
-import { codeExecutionQueue, codeExecutionWorker, setCodeQueueIO } from './code-execution.queue';
+import { codeExecutionQueue, codeExecutionWorker, setCodeQueueIO, processJudge0Callback } from './code-execution.queue';
 import type { CodeExecutionJobData } from './code-execution.queue';
 
 import { eloQueue, eloWorker, setSocketIOInstance as setEloQueueIO } from './elo.queue';

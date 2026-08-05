@@ -3,9 +3,9 @@ import { useNav, PAGES } from '../navigation/NavigationContext';
 import gsap from 'gsap';
 import { useArenaStore } from '../store/useArenaStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { useSocket } from '../contexts/SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { TournamentHub } from './TournamentHub';
-import { useLayout } from '../components/layout/MainLayout';
+import { useLayout } from '../contexts/LayoutContext';
 import { User, LeaderboardEntry, MatchRoom } from '../types';
 import { useMatch } from '../contexts/MatchContext';
 import api from '../lib/api';
@@ -105,7 +105,7 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
         goToArenaMatch, params 
     } = useNav();
     const { isMenuOpen, setIsMenuOpen, isLight, setTheme } = useLayout();
-    const { createRoom, joinRoom, findMatch: doFindMatch, cancelSearch: doCancelSearch, status: matchStatus, roomId: matchRoomId } = useMatch();
+    const { createRoom, joinMatch: joinRoom, findMatch: doFindMatch, cancelSearch: doCancelSearch, status: matchStatus, roomId: matchRoomId } = useMatch();
 
     const { updateRating, updateStats } = useAuthStore();
     const { on, emit } = useSocket();
@@ -233,6 +233,9 @@ export const Dashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     }, [currentUser.id]);
 
     useEffect(() => {
+        const token = useAuthStore.getState().token;
+        if (!token || !currentUser?.id) return;
+
         fetchDashboardData();
         fetchProblems();
         fetchTournaments();

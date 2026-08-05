@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { logger } from './logger';
 
 const redisUrl = env.REDIS_URL || 'redis://127.0.0.1:6379';
-
+logger.info(`[REDIS] URL: ${redisUrl}`);
 /**
  * Shared Redis connection options with retry strategy and error handling.
  */
@@ -18,26 +18,31 @@ const baseOptions: RedisOptions = {
         }
         return delay;
     },
-    lazyConnect: true,
+
     // Required for Upstash/rediss:// connections
     tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
 };
-
+const realRedis = new Redis(redisUrl, baseOptions);
+logger.info(`[REDIS] Initial Status: ${realRedis.status}`);
 // ── Primary Client ─────────────────────────────────────────────────────────
 // Used for general commands: GET, SET, ZADD, etc.
-const realRedis = new Redis(redisUrl, baseOptions);
+
 
 realRedis.on('connect', () => {
     logger.info('[REDIS] Primary client connected');
 });
 
 const isConnRefused = (err: any) => {
-    return err.code === 'ECONNREFUSED' || 
-           err.message?.includes('ECONNREFUSED') ||
-           (err.name === 'AggregateError' && err.errors?.some((e: any) => e.code === 'ECONNREFUSED'));
+    return err.code === 'ECONNREFUSED' ||
+        err.message?.includes('ECONNREFUSED') ||
+        (err.name === 'AggregateError' && err.errors?.some((e: any) => e.code === 'ECONNREFUSED'));
 };
 
 realRedis.on('error', (err: any) => {
+    if (env.NODE_ENV === 'production') {
+        logger.fatal({ err }, '[REDIS] Connection error in production. Shutting down.');
+        process.exit(1);
+    }
     if (isConnRefused(err) && (realRedis.status === 'reconnecting' || realRedis.status === 'connecting')) {
         return; // Silent during reconnection
     }
@@ -47,6 +52,10 @@ realRedis.on('error', (err: any) => {
 });
 
 realRedis.on('end', () => {
+    if (env.NODE_ENV === 'production') {
+        logger.fatal('[REDIS] Connection ended in production. Shutting down.');
+        process.exit(1);
+    }
     logger.warn('[REDIS] Primary connection closed. Redis features are disabled.');
 });
 
@@ -56,6 +65,10 @@ export function createPubClient(): Redis {
     const pub = new Redis(redisUrl, { ...baseOptions, enableOfflineQueue: true });
     pub.on('connect', () => logger.info('[REDIS] Pub client connected'));
     pub.on('error', (err: any) => {
+        if (env.NODE_ENV === 'production') {
+            logger.fatal({ err }, '[REDIS] Pub client connection error in production. Shutting down.');
+            process.exit(1);
+        }
         if (!isConnRefused(err)) logger.error({ err }, '[REDIS] Pub client error');
     });
     return pub;
@@ -65,6 +78,10 @@ export function createSubClient(): Redis {
     const sub = new Redis(redisUrl, { ...baseOptions, enableOfflineQueue: true });
     sub.on('connect', () => logger.info('[REDIS] Sub client connected'));
     sub.on('error', (err: any) => {
+        if (env.NODE_ENV === 'production') {
+            logger.fatal({ err }, '[REDIS] Sub client connection error in production. Shutting down.');
+            process.exit(1);
+        }
         if (!isConnRefused(err)) logger.error({ err }, '[REDIS] Sub client error');
     });
     return sub;
@@ -77,6 +94,10 @@ export function createBullMQRedisClient(): Redis {
         enableOfflineQueue: true,
     });
     client.on('error', (err: any) => {
+        if (env.NODE_ENV === 'production') {
+            logger.fatal({ err }, '[REDIS] BullMQ client connection error in production. Shutting down.');
+            process.exit(1);
+        }
         if (!isConnRefused(err)) logger.error({ err }, '[REDIS] BullMQ client error');
     });
     return client;
@@ -103,6 +124,10 @@ export const redis = new Proxy(realRedis, {
                 const cmd = String(prop);
 
                 if (target.status !== 'ready') {
+                    if (env.NODE_ENV === 'production') {
+                        throw new Error(`Redis command '${cmd}' failed: Redis client is not in ready state (${target.status})`);
+                    }
+
                     // Log only once per command type to avoid spamming
                     if (!loggedCommands.has(cmd)) {
                         logger.debug({ cmd }, '[REDIS] Command intercepted — Redis unavailable, returning fallback');

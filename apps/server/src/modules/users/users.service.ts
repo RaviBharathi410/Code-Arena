@@ -1,22 +1,14 @@
-import { db } from '../../db';
-import { users } from '@arena/database';
-import { eq } from 'drizzle-orm';
+import { User } from '../../models/User';
 
 export class UsersService {
     async getById(id: string) {
-        const user = await db.query.users.findFirst({
-            where: eq(users.id, id),
-        });
+        const user = await User.findById(id).lean();
         if (!user) throw new Error('User not found');
         return user;
     }
 
     async updateProfile(id: string, data: { username?: string; email?: string; avatarUrl?: string }) {
-        const [updatedUser] = await db.update(users)
-            .set(data)
-            .where(eq(users.id, id))
-            .returning();
-
+        const updatedUser = await User.findByIdAndUpdate(id, { $set: data }, { new: true }).lean();
         if (!updatedUser) throw new Error('User not found');
         return updatedUser;
     }

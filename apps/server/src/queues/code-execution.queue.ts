@@ -1,12 +1,96 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { db } from '../db';
-import { submissions, matchRooms, problems } from '@arena/database';
-import { eq } from 'drizzle-orm';
+import { Submission } from '../models/Submission';
+import { MatchRoom } from '../models/MatchRoom';
+import { Problem } from '../models/Problem';
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { createBullMQRedisClient } from '../lib/redis';
 import { scoringEngine } from '../lib/scoring';
 import { matchesService } from '../modules/matches/matches.service';
+import { analyticsQueue } from './analytics.queue';
+
+// Enforce strict startup constraints for Judge0 in production
+const isProduction = env.NODE_ENV === 'production';
+const hasValidKey = env.JUDGE0_API_KEY && env.JUDGE0_API_KEY !== 'your_judge0_key';
+
+if (isProduction && !hasValidKey) {
+    throw new Error('FATAL: env variable JUDGE0_API_KEY is missing or contains the placeholder value in production mode. uplink cannot deploy safely.');
+}
+
+function encodeB64(str: string): string {
+    return Buffer.from(str || '').toString('base64');
+}
+
+function decodeB64(str: string | null | undefined): string {
+    if (!str) return '';
+    return Buffer.from(str, 'base64').toString('utf8');
+}
+
+async function runTestCase(code: string, languageId: number, stdin: string, expectedOutput: string) {
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+    if (env.JUDGE0_API_KEY && env.JUDGE0_API_KEY !== 'your_judge0_key') {
+        headers['X-RapidAPI-Key'] = env.JUDGE0_API_KEY;
+    }
+
+    const payload = {
+        source_code: encodeB64(code),
+        language_id: languageId,
+        stdin: encodeB64(stdin),
+        expected_output: encodeB64(expectedOutput),
+    };
+
+    const res = await fetch(`${env.JUDGE0_API_URL}/submissions?base64_encoded=true`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+        throw new Error(`Judge0 API POST failed: ${res.statusText} (${res.status})`);
+    }
+
+    const data = await res.json();
+    const token = data.token;
+    if (!token) {
+        throw new Error('Judge0 did not return a submission token');
+    }
+
+    const maxPollAttempts = 20; // 20 * 500ms = 10s
+    for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const pollRes = await fetch(`${env.JUDGE0_API_URL}/submissions/${token}?base64_encoded=true`, {
+            headers,
+        });
+
+        if (!pollRes.ok) {
+            throw new Error(`Judge0 API poll failed: ${pollRes.statusText} (${pollRes.status})`);
+        }
+
+        const runResult = await pollRes.json();
+        const statusId = runResult.status?.id;
+
+        if (statusId !== 1 && statusId !== 2) {
+            return {
+                status: {
+                    id: statusId,
+                    description: runResult.status?.description,
+                },
+                time: runResult.time,
+                memory: runResult.memory,
+                stdout: decodeB64(runResult.stdout),
+                stderr: decodeB64(runResult.stderr),
+                compile_output: decodeB64(runResult.compile_output),
+            };
+        }
+    }
+
+    const error: any = new Error('Code execution timed out (Judge0 polling exceeded 10s)');
+    error.status = 408;
+    throw error;
+}
 
 export interface CodeExecutionJobData {
     submissionId: string;
@@ -43,10 +127,13 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
 
         try {
             if (mode === 'submit') {
-                await db.update(submissions).set({ status: 'PROCESSING' }).where(eq(submissions.id, submissionId));
+                await Submission.updateOne({ _id: submissionId }, { $set: { status: 'PROCESSING' } });
             }
 
-            const isMock = !env.JUDGE0_API_KEY || env.JUDGE0_API_KEY === 'your_judge0_key';
+            const isMock = env.USE_JUDGE0_MOCK;
+            if (isMock) {
+                logger.warn('⚠️⚠️⚠️ WARNING: USE_JUDGE0_MOCK IS ACTIVE. USING SIMULATED EXECUTION. THIS MUST NOT BE USED IN PRODUCTION. ⚠️⚠️⚠️');
+            }
 
             const judgeSubmissions = testCases.map((tc) => ({
                 source_code: code,
@@ -62,20 +149,14 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
                     await new Promise(r => setTimeout(r, Math.random() * 300 + 200));
                     return { status: { id: 3, description: 'Accepted' }, time: '0.04', memory: 2048, stdout: sub.expected_output };
                 }
-                const res = await fetch(`${env.JUDGE0_API_URL}/submissions?base64_encoded=false&wait=true`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-RapidAPI-Key': env.JUDGE0_API_KEY },
-                    body: JSON.stringify(sub),
-                });
-                if (!res.ok) throw new Error(`Judge0 error: ${res.status}`);
-                return res.json();
+                return runTestCase(code, languageId, sub.stdin, sub.expected_output);
             }));
 
             // Aggregate results
             let passedCount = 0;
             let maxTime = 0;
             let maxMemory = 0;
-            const testResults = results.map((res, i) => {
+            const testResults = results.map((res: any, i) => {
                 const passed = res.status?.id === 3;
                 if (passed) passedCount++;
                 if (res.time) maxTime = Math.max(maxTime, parseFloat(res.time) || 0);
@@ -95,7 +176,7 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
                 : undefined;
 
             if (mode === 'submit') {
-                const problem = await db.query.problems.findFirst({ where: eq(problems.id, job.data.problemId) });
+                const problem = await Problem.findById(job.data.problemId).lean();
 
                 const finalScore = scoringEngine.calculateScore({
                     status: finalStatus,
@@ -108,33 +189,46 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
                     timeToSolveMs,
                 });
 
-                await db.update(submissions).set({
-                    status: finalStatus,
-                    timeMs: Math.round(maxTime * 1000),
-                    memoryKb: maxMemory,
-                    testCasesPass: passedCount,
-                    testCasesTotal: testCases.length,
-                    timeComplexity: detectedComplexity,
-                    qualityScore,
-                    finalScore,
-                    testResults: testResults as any,
-                }).where(eq(submissions.id, submissionId));
+                await Submission.updateOne({ _id: submissionId }, {
+                    $set: {
+                        status: finalStatus,
+                        timeMs: Math.round(maxTime * 1000),
+                        memoryKb: maxMemory,
+                        testCasesPass: passedCount,
+                        testCasesTotal: testCases.length,
+                        timeComplexity: detectedComplexity,
+                        qualityScore,
+                        finalScore,
+                    }
+                });
+
+                // Trigger analytics skill update
+                await analyticsQueue.add('update-skills', {
+                    userId,
+                    matchId,
+                    problemDifficulty: problem?.difficulty || 'easy',
+                    result: finalStatus === 'ACCEPTED' ? 'win' : 'loss',
+                    executionTime: Math.round(maxTime * 1000),
+                    languageId,
+                });
 
                 // Mark player done; check if both finished
                 if (allPassed) {
-                    const room = await db.query.matchRooms.findFirst({ where: eq(matchRooms.id, matchId) });
-                    const isP1 = room?.player1Id === userId;
-                    const doneField = isP1 ? { player1DoneAt: new Date() } : { player2DoneAt: new Date() };
-                    const [updatedRoom] = await db.update(matchRooms).set(doneField).where(eq(matchRooms.id, matchId)).returning();
+                    const room = await MatchRoom.findById(matchId).lean();
+                    if (room) {
+                        const isP1 = room.player1Id?.toString() === userId;
+                        const doneField = isP1 ? { player1DoneAt: new Date() } : { player2DoneAt: new Date() };
+                        const updatedRoom = await MatchRoom.findByIdAndUpdate(matchId, { $set: doneField }, { new: true }).lean();
 
-                    if (updatedRoom.player1DoneAt && updatedRoom.player2DoneAt) {
-                        const matchResult = await matchesService.calculateMatchResult(matchId);
-                        if (socketIOInstance && matchResult) {
-                            socketIOInstance.to(matchId).emit('match:result', {
-                                ...matchResult,
-                                rankDeltaP1: matchResult.deltaP1,
-                                rankDeltaP2: matchResult.deltaP2,
-                            });
+                        if (updatedRoom?.player1DoneAt && updatedRoom?.player2DoneAt) {
+                            const matchResult = await matchesService.calculateMatchResult(matchId);
+                            if (socketIOInstance && matchResult) {
+                                socketIOInstance.to(matchId).emit('match:result', {
+                                    ...matchResult,
+                                    rankDeltaP1: matchResult.deltaP1,
+                                    rankDeltaP2: matchResult.deltaP2,
+                                });
+                            }
                         }
                     }
                 }
@@ -169,7 +263,7 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
         } catch (err: any) {
             logger.error({ err: err.message, submissionId, matchId, mode }, '[WORKER] Execution failed');
             if (mode === 'submit') {
-                await db.update(submissions).set({ status: 'ERROR' }).where(eq(submissions.id, submissionId)).catch(() => {});
+                await Submission.updateOne({ _id: submissionId }, { $set: { status: 'ERROR' } }).catch(() => {});
             }
             if (socketIOInstance) {
                 const event = mode === 'submit' ? 'battle:submission_result' : 'battle:run_result';
@@ -201,23 +295,27 @@ export async function processJudge0Callback(data: {
     const isAccepted = status?.id === 3;
 
     // 1. Update submission
-    await db.update(submissions).set({
-        status: finalStatus,
-        timeMs: Math.round(parseFloat(time || '0') * 1000),
-        memoryKb: memory,
-    }).where(eq(submissions.id, submissionId));
+    await Submission.updateOne({ _id: submissionId }, {
+        $set: {
+            status: finalStatus,
+            timeMs: Math.round(parseFloat(time || '0') * 1000),
+            memoryKb: memory,
+        }
+    });
 
     // 2. If it's a match and it was accepted, check if match is over
     if (isAccepted) {
-        const room = await db.query.matchRooms.findFirst({ where: eq(matchRooms.id, matchId) });
-        const isP1 = room?.player1Id === userId;
-        const doneField = isP1 ? { player1DoneAt: new Date() } : { player2DoneAt: new Date() };
-        const [updatedRoom] = await db.update(matchRooms).set(doneField).where(eq(matchRooms.id, matchId)).returning();
+        const room = await MatchRoom.findById(matchId).lean();
+        if (room) {
+            const isP1 = room.player1Id?.toString() === userId;
+            const doneField = isP1 ? { player1DoneAt: new Date() } : { player2DoneAt: new Date() };
+            const updatedRoom = await MatchRoom.findByIdAndUpdate(matchId, { $set: doneField }, { new: true }).lean();
 
-        if (updatedRoom.player1DoneAt && updatedRoom.player2DoneAt) {
-            const matchResult = await matchesService.calculateMatchResult(matchId);
-            if (socketIOInstance && matchResult) {
-                socketIOInstance.to(matchId).emit('match:result', matchResult);
+            if (updatedRoom?.player1DoneAt && updatedRoom?.player2DoneAt) {
+                const matchResult = await matchesService.calculateMatchResult(matchId);
+                if (socketIOInstance && matchResult) {
+                    socketIOInstance.to(matchId).emit('match:result', matchResult);
+                }
             }
         }
     }

@@ -33,6 +33,24 @@ export const authLimiter = rateLimit({
     skipSuccessfulRequests: true,
 });
 
+// ── express-rate-limit: Abuse-prone endpoint limiter ───────────────────────
+// Very strict limit on password reset, email resend, etc.
+
+export const abuseLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,  // 1 hour
+    max: 5,                    // 5 requests per hour
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        const ip = req.ip || req.socket.remoteAddress || 'unknown';
+        logger.warn({ ip, path: req.originalUrl }, '[SECURITY] Abuse limiter triggered');
+        monitor.trackRateLimitStrike(ip, req.originalUrl);
+        res.status(429).json({
+            message: 'Too many requests. Try again in an hour.'
+        });
+    },
+});
+
 /**
  * Initialize rate limiter with fallback logic.
  * Note: RateLimiterRedis is preferred for distributed state, 

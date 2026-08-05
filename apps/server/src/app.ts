@@ -2,15 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import hpp from 'hpp';
+import mongoSanitize from 'express-mongo-sanitize';
 import { env } from './config/env';
-import { apiLimiter, authLimiter, authSlidingWindowLimiter } from './middleware/rateLimiter';
+import { apiLimiter, authLimiter, authSlidingWindowLimiter, abuseLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/error-handler';
 import pinoHttp from 'pino-http';
 import { logger } from './lib/logger';
 import crypto from 'crypto';
-import * as trpcExpress from '@trpc/server/adapters/express';
-import { appRouter } from './trpc/root';
-import { createContext } from './trpc';
 
 import authRoutes from './modules/auth/auth.router';
 import userRoutes from './modules/users/users.router';
@@ -22,6 +21,7 @@ import submissionRoutes from './modules/submissions/submissions.router';
 import webhookRoutes from './modules/internal/webhook.router';
 import { createQueueDashboard } from './admin/queue-dashboard';
 import metricsRoutes from './admin/metrics.router';
+import adminRoutes from './modules/admin/admin.router';
 import { requireAdmin, requireAuth } from './middleware/auth.middleware';
 
 export const createApp = () => {
@@ -38,10 +38,11 @@ export const createApp = () => {
         helmet.contentSecurityPolicy({
             directives: {
                 defaultSrc: ["'self'"],
-                scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+                scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
                 styleSrc: ["'self'", "'unsafe-inline'"],
                 connectSrc: ["'self'", ...env.CORS_ORIGIN.split(',').map(o => o.trim()), "ws://localhost:5173", "wss://localhost:5173", "ws://localhost:3001", "wss://localhost:3001", "ws://127.0.0.1:3001", "wss://127.0.0.1:3001"],
-                imgSrc: ["'self'", "data:", "https:"],
+                imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https:"],
+                workerSrc: ["'self'", "blob:"],
             },
         })
     );
@@ -66,11 +67,24 @@ export const createApp = () => {
     );
 
     // ── Core Middlewares ───────────────────────────────────────────────────
-    app.use(express.json({ limit: '10kb' })); // Limit payload size
+    app.use(express.json({ limit: '10kb' }));
+    app.use(express.urlencoded({
+        extended: false,
+        limit: '10kb'
+    }));
+    // Limit payload size to prevent DoS
     app.use(cookieParser());
 
+    // ── Security Hardening: HPP & NoSQL Sanitization ───────────────────────
+    app.use(hpp()); // Prevent HTTP Parameter Pollution
+    app.use(
+        mongoSanitize({
+            replaceWith: "_",
+        })
+    );
+
     // ── Step 12: Rate Limiting ─────────────────────────────────────────────
-    // app.use('/api', apiLimiter);
+    app.use('/api', apiLimiter);
 
     // ── Health Check (no auth, no limiter) ────────────────────────────────
     app.get('/health', (req, res) => {
@@ -79,8 +93,9 @@ export const createApp = () => {
 
     // ── Auth routes with strict limiter on sensitive endpoints ─────────────
     // Two layers: express-rate-limit (fixed window) + rate-limiter-flexible (sliding window via Redis)
-    // app.use('/api/auth/login', authLimiter, authSlidingWindowLimiter);
-    // app.use('/api/auth/register', authLimiter, authSlidingWindowLimiter);
+    app.use('/api/auth/login', authLimiter, authSlidingWindowLimiter);
+    app.use('/api/auth/register', authLimiter, authSlidingWindowLimiter);
+    app.use('/api/auth/reset-password', abuseLimiter);
 
     // ── API Routes ─────────────────────────────────────────────────────────
     app.use('/api/auth', authRoutes);
@@ -91,15 +106,6 @@ export const createApp = () => {
     app.use('/api/tournaments', tournamentRoutes);
     app.use('/api/submissions', submissionRoutes);
 
-    // ── tRPC API ───────────────────────────────────────────────────────────
-    app.use(
-        '/api/trpc',
-        trpcExpress.createExpressMiddleware({
-            router: appRouter,
-            createContext,
-        })
-    );
-
     // ── Internal Routes (not behind API rate limiter) ──────────────────────
     // Judge0 webhook callback — no auth, but will be secured by signature in Phase 5
     app.use('/internal', webhookRoutes);
@@ -107,8 +113,13 @@ export const createApp = () => {
     // ── Admin Dashboard ────────────────────────────────────────────────────
     // Bull Board queue dashboard — protected by admin JWT middleware
     app.use('/admin/queues', requireAuth, requireAdmin, createQueueDashboard());
-    app.use('/admin/metrics', metricsRoutes);
-
+    app.use(
+        '/admin/metrics',
+        requireAuth,
+        requireAdmin,
+        metricsRoutes
+    );
+    app.use('/api/admin', adminRoutes);
 
     // ── Step 16: Global Error Handler (MUST be last) ──────────────────────
     app.use(errorHandler);

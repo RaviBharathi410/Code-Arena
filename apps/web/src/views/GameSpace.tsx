@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { useNav } from '../navigation/NavigationContext';
 import gsap from 'gsap';
 import { useMatch } from '../contexts/MatchContext';
-import { useSocket } from '../contexts/SocketContext';
-import { useVoiceCommand } from '../hooks/useVoiceCommand';
-import { VoiceVisualizer } from '../components/ui/VoiceVisualizer';
+import { useSocket } from '../hooks/useSocket';
+import { VoiceWorkspaceModal } from '../components/arena/VoiceWorkspaceModal';
 import {
     Activity,
     X,
@@ -13,19 +12,17 @@ import {
     Zap,
     Shield,
     Signal,
-    SignalLow,
     WifiOff,
     Terminal,
     Cpu,
     Layers,
     Timer,
-    Mic,
-    MicOff,
     Flame,
     TrendingUp,
-    Menu
+    Menu,
+    Wand2
 } from 'lucide-react';
-import { useLayout } from '../components/layout/MainLayout';
+import { useLayout } from '../contexts/LayoutContext';
 import api from '../lib/api';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -45,7 +42,10 @@ const PROBLEMS: GameProblem[] = [
     {
         id: 'two-sum',
         title: 'Two Sum',
-        difficulty: 'Easy',
+        slug: 'two-sum',
+        category: 'Algorithms',
+        boilerplate: {},
+        difficulty: 'EASY',
         timeLimit: 300,
         description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.',
         examples: [
@@ -61,7 +61,10 @@ const PROBLEMS: GameProblem[] = [
     {
         id: 'reverse-list',
         title: 'Reverse Linked List',
-        difficulty: 'Easy',
+        slug: 'reverse-list',
+        category: 'Algorithms',
+        boilerplate: {},
+        difficulty: 'EASY',
         timeLimit: 300,
         description: 'Given the head of a singly linked list, reverse the list, and return the reversed list.',
         examples: [
@@ -74,7 +77,10 @@ const PROBLEMS: GameProblem[] = [
     {
         id: 'valid-parens',
         title: 'Valid Parentheses',
-        difficulty: 'Medium',
+        slug: 'valid-parens',
+        category: 'Algorithms',
+        boilerplate: {},
+        difficulty: 'MEDIUM',
         timeLimit: 600,
         description: 'Given a string `s` containing just the characters `(`, `)`, `{`, `}`, `[` and `]`, determine if the input string is valid.',
         examples: [
@@ -95,11 +101,12 @@ export const GameSpace: React.FC = () => {
 
     const { connect, socket, connected: isSocketConnected } = useSocket();
     const {
-        createRoom, joinMatch, updateCode: syncCode,
+        createRoom, joinMatch, joinById, updateCode: syncCode,
         problem: activeProblem, winner,
         opponentCode: liveOpponentCode, submitCode: socketSubmit,
         runCode: socketRun,
-        verdict, runVerdict, error: matchError
+        verdict, runVerdict, error: matchError,
+        players
     } = useMatch();
 
 
@@ -135,6 +142,7 @@ export const GameSpace: React.FC = () => {
     const [showExitWarning, setShowExitWarning] = useState(false);
     const [language, setLanguage] = useState('javascript');
     const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+    const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
 
     const SUPPORTED_LANGUAGES = [
         { id: 'javascript', name: 'JS', icon: 'JS', backendId: 'js' },
@@ -218,7 +226,7 @@ export const GameSpace: React.FC = () => {
                             initialCode: prob.baseCode || 'function solution() {\n    // Write your code here\n}',
                             constraints: prob.constraints || [],
                             examples: prob.examples || [],
-                            testCases: prob.testCases || [],
+                            testCases: (prob.testCases || []).map((tc: any) => ({ input: tc.input, expected: tc.expected_output ?? tc.expected })),
                         };
                         setSelectedProblem(gameProb);
                         setCode(gameProb.initialCode);
@@ -238,13 +246,13 @@ export const GameSpace: React.FC = () => {
         if (activeProblem) {
             setSelectedProblem({
                 ...activeProblem,
-                initialCode: activeProblem.baseCode || '',
+                initialCode: (activeProblem as any).baseCode || activeProblem.boilerplate?.['javascript'] || activeProblem.boilerplate?.['js'] || '',
                 timeLimit: 600,
                 constraints: activeProblem.constraints || [],
                 examples: activeProblem.examples || [],
-                testCases: activeProblem.testCases || [],
+                testCases: (activeProblem.testCases || []).map((tc: any) => ({ input: tc.input, expected: tc.expected_output ?? tc.expected })),
             } as GameProblem);
-            setCode(activeProblem.baseCode || '');
+            setCode((activeProblem as any).baseCode || activeProblem.boilerplate?.['javascript'] || activeProblem.boilerplate?.['js'] || '');
         }
     }, [activeProblem]);
 
@@ -527,12 +535,16 @@ export const GameSpace: React.FC = () => {
             setIsRunning(false);
             setIsSubmitting(false);
             
-            const isMe = winner.winnerId === (socket as any)?.user?.id;
-            const mySub = (winner.player1Id === (socket as any)?.user?.id) ? winner.p1Sub : winner.p2Sub;
-            const myDelta = (winner.player1Id === (socket as any)?.user?.id) ? winner.deltaP1 : winner.deltaP2;
+            const myUserId = (socket as any)?.user?.id;
+            const isMe = winner.winnerId === myUserId;
+            
+            // Check if player1 matches my user ID using context state players array
+            const isPlayer1 = players[0]?.id === myUserId;
+            const mySub = isPlayer1 ? winner.p1Sub : winner.p2Sub;
+            const myDelta = isPlayer1 ? winner.rankDeltaP1 : winner.rankDeltaP2;
 
             setScore({
-                accuracy: mySub?.testCasesPass ? Math.round((mySub.testCasesPass / mySub.testCasesTotal) * 100) : 0,
+                accuracy: (mySub?.testCasesPass && mySub?.testCasesTotal) ? Math.round((mySub.testCasesPass / mySub.testCasesTotal) * 100) : 0,
                 timeBonus: Math.round((mySub?.finalScore || 0) * 0.1),
                 rpGain: myDelta || (isMe ? 32 : -15),
                 expectedGain: 18,
@@ -554,7 +566,7 @@ export const GameSpace: React.FC = () => {
             setShowResults(true);
             setShowScoreImpact(false);
         }
-    }, [winner, isPractice, socket]);
+    }, [winner, isPractice, socket, players]);
 
     const handleAutoSubmit = useCallback(() => {
         clearInterval(timerRef.current);
@@ -582,22 +594,11 @@ export const GameSpace: React.FC = () => {
     }, [isPractice, selectedProblem, createRoom, isSocketConnected, connect]);
 
 
-    // Voice Commands
-    const [voiceFeedback, setVoiceFeedback] = useState('');
-    const commands = useMemo(() => ({
-        'submit code': handleSubmit,
-        'run tests': handleSubmit,
-        'reset code': () => setCode(selectedProblem?.initialCode || ''),
-        'show problem': () => setShowProblem(true),
-        'hide problem': () => setShowProblem(false),
-        'clear feedback': () => setVoiceFeedback(''),
-    }), [handleSubmit, selectedProblem]);
-
-    const { isListening, startListening, stopListening } = useVoiceCommand({
-        commands,
-        onInterimResults: (text) => setVoiceFeedback(text),
-        autoStart: true
-    });
+    const handleAddGeneratedCode = (generatedCode: string) => {
+        const newCode = code ? code + '\n' + generatedCode : generatedCode;
+        setCode(newCode);
+        syncCode(newCode);
+    };
 
 
     // Results logic
@@ -712,6 +713,14 @@ export const GameSpace: React.FC = () => {
 
                 {/* Action Controls */}
                 <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => setIsVoiceModalOpen(true)}
+                        className="px-4 py-2.5 rounded-2xl border transition-all bg-accent-secondary/10 border-accent-secondary/30 text-accent-secondary hover:bg-accent-secondary/20 hover:shadow-[0_0_20px_rgba(139,92,246,0.2)] flex items-center gap-2 font-black uppercase tracking-widest text-[10px]"
+                        title="Open Neural Voice Engine"
+                    >
+                        <Wand2 size={14} /> Voice Coder
+                    </button>
+
                     {!isRunning ? (
                         <div className="flex items-center gap-3">
                             {!isPractice && (
@@ -746,25 +755,6 @@ export const GameSpace: React.FC = () => {
                         </div>
                     ) : (
                         <div className="flex items-center gap-3">
-                            <div className="flex flex-col items-end">
-                                <div className="flex items-center gap-2">
-                                    <VoiceVisualizer isActive={isListening} color="#22d3ee" />
-                                    <button
-                                        onClick={isListening ? stopListening : startListening}
-                                        className={`p-2 rounded-lg border transition-all ${isListening
-                                            ? 'bg-accent-secondary/15 border-accent-secondary/40 text-accent-secondary'
-                                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-                                            }`}
-                                    >
-                                        {isListening ? <Mic size={18} /> : <MicOff size={18} />}
-                                    </button>
-                                </div>
-                                {voiceFeedback && (
-                                    <span className="text-[10px] font-mono text-accent-secondary/70 animate-pulse mt-1 max-w-[150px] truncate">
-                                        {voiceFeedback}
-                                    </span>
-                                )}
-                            </div>
                             <button
                                 onClick={handleRun}
                                 className={`flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/10 text-white font-black uppercase text-xs tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl ${isRunningCode ? 'opacity-50 pointer-events-none' : ''}`}
@@ -1111,6 +1101,13 @@ export const GameSpace: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            <VoiceWorkspaceModal
+                isOpen={isVoiceModalOpen}
+                onClose={() => setIsVoiceModalOpen(false)}
+                currentLanguage={language === 'javascript' ? 'js' : language === 'python' ? 'py' : language === 'java' ? 'java' : 'cpp'}
+                onAddCode={handleAddGeneratedCode}
+            />
         </div>
     );
 };

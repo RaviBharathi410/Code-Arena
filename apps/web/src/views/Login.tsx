@@ -77,33 +77,36 @@ export const Login: React.FC = () => {
         setError(null);
 
         try {
-            let response;
+            let sessionObj: any;
+            let userObj: any;
+
             if (isLogin) {
                 // Login API call
-                response = await api.post('/auth/login', {
+                const response = await api.post('/auth/login', {
                     identifier,
                     password
                 });
+                
+                sessionObj = { access_token: response.data.accessToken };
+                userObj = response.data.user;
             } else {
                 // Register API call
-                response = await api.post('/auth/register', {
-                    username,
+                const response = await api.post('/auth/register', {
                     email,
-                    password
+                    password,
+                    username
                 });
+
+                sessionObj = { access_token: response.data.accessToken };
+                userObj = response.data.user;
             }
 
-            const { user, accessToken } = response.data;
-            setAuth(user, accessToken);
-            // Flow: landing -> signin/signup -> command center
-            goToDashboard();
-        } catch (err: any) {
-            let msg = err.response?.data?.message || 'Authentication failed. Please check your uplink.';
-            if (err.response?.status === 409) {
-                msg = 'Username or email already taken. Please try another or sign in.';
-            } else if (err.response?.status === 401) {
-                msg = 'Invalid credentials. Please verify your operator ID and password.';
+            if (sessionObj) {
+                setAuth(userObj, sessionObj.access_token);
+                goToDashboard();
             }
+        } catch (err: any) {
+            let msg = err.response?.data?.error || err.message || 'Authentication failed. Please check your uplink.';
             setError(msg);
             setPassword('');
         } finally {

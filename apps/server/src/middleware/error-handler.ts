@@ -44,14 +44,14 @@ export const errorHandler = (
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    // SQLite unique constraint violation (matches PostgreSQL SQLITE_CONSTRAINT_UNIQUE)
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
-        return res.status(409).json({ message: 'Already exists' });
+    // MongoDB duplicate key error (11000)
+    if (err.code === 11000) {
+        return res.status(409).json({ message: 'Resource already exists' });
     }
 
-    // SQLite FK constraint violation (referenced resource missing)
-    if (err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || err.code === '23503') {
-        return res.status(404).json({ message: 'Referenced resource not found' });
+    // Mongoose CastError (invalid ObjectId)
+    if (err.name === 'CastError' && err.kind === 'ObjectId') {
+        return res.status(404).json({ message: 'Resource not found' });
     }
 
     // Generic fallback

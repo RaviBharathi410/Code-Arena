@@ -1,6 +1,6 @@
-import { db } from '../../db';
-import { submissions, matchRooms, problems } from '@arena/database';
-import { eq, and } from 'drizzle-orm';
+import { MatchRoom } from '../../models/MatchRoom';
+import { Problem } from '../../models/Problem';
+import { Submission } from '../../models/Submission';
 import crypto from 'crypto';
 import { logger } from '../../lib/logger';
 import { matchesService } from '../matches/matches.service';
@@ -26,18 +26,12 @@ export class SubmissionsService {
         const languageId = LANGUAGE_MAP[data.language];
         if (!languageId) throw new Error('Unsupported language');
 
-        const match = await db.query.matchRooms.findFirst({
-            where: eq(matchRooms.id, data.matchId),
-        });
-
+        const match = await MatchRoom.findById(data.matchId).lean();
         if (!match) throw new Error('Match not found');
         // Allow execution even if practice room hasn't transitioned to 'active' yet
         if (match.status === 'completed') throw new Error('Match is already completed');
 
-        const problem = await db.query.problems.findFirst({
-            where: eq(problems.id, match.problemId),
-        });
-
+        const problem = await Problem.findById(match.problemId).lean();
         if (!problem) throw new Error('Problem not found');
 
         // If 'run' mode, we run up to 25 sample test cases
@@ -50,8 +44,8 @@ export class SubmissionsService {
 
         // For 'submit' mode, we persist the submission record
         if (data.mode === 'submit') {
-            await db.insert(submissions).values({
-                id: submissionId,
+            await Submission.create({
+                _id: submissionId,
                 matchId: data.matchId,
                 userId: data.userId,
                 code: data.code,
@@ -70,7 +64,7 @@ export class SubmissionsService {
             userId: data.userId,
             testCases: testCasesToRun,
             mode: data.mode,
-            matchStartedAt: match.startedAt?.toISOString(),
+            matchStartedAt: match.startedAt ? match.startedAt.toISOString() : undefined,
         }, {
             jobId: `exec-${submissionId}`,
         });
@@ -79,11 +73,25 @@ export class SubmissionsService {
     }
 
     async getSubmissionById(id: string) {
-        const submission = await db.query.submissions.findFirst({
-            where: eq(submissions.id, id),
-        });
+        const submission = await Submission.findById(id).lean();
         if (!submission) throw new Error('Submission not found');
         return submission;
+    }
+
+    async createSubmission(data: {
+        matchId: string;
+        userId: string;
+        code: string;
+        languageId: number;
+    }) {
+        const language = Object.keys(LANGUAGE_MAP).find(key => LANGUAGE_MAP[key] === data.languageId) || 'js';
+        return this.executeCode({
+            matchId: data.matchId,
+            userId: data.userId,
+            code: data.code,
+            language,
+            mode: 'submit'
+        });
     }
 }
 

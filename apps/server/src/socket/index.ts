@@ -12,35 +12,36 @@ import { logger } from '../lib/logger';
  * so events emitted on one server reach clients connected to another.
  * This is the single most impactful upgrade for real-time reliability.
  */
-export const setupSocket = (io: Server) => {
+export let ioInstance: Server | null = null;
+
+export const setupSocket = async (io: Server) => {
+    ioInstance = io;
     // ── Redis Adapter ──────────────────────────────────────────────────────
     // Two separate ioredis clients are required (pub + sub).
     try {
         const pubClient = createPubClient();
         const subClient = createSubClient();
 
-        // Wait for both clients to be ready, then attach adapter
-        Promise.all([
-            new Promise<void>((resolve) => pubClient.once('ready', resolve)),
-            new Promise<void>((resolve) => subClient.once('ready', resolve)),
-        ]).then(() => {
-            io.adapter(createAdapter(pubClient, subClient));
-            logger.info('[SOCKET.IO] Redis adapter attached — horizontal scaling enabled');
-        }).catch((err) => {
-            logger.warn({ err }, '[SOCKET.IO] Redis adapter failed to attach — running in single-instance mode');
-        });
 
-        // Set a timeout so we don't wait forever if Redis is down
-        setTimeout(() => {
-            if (pubClient.status !== 'ready' || subClient.status !== 'ready') {
-                logger.warn('[SOCKET.IO] Redis not ready after 5s — continuing without adapter');
-            }
-        }, 5000);
+        // Wait until both are ready
+        await Promise.all([
+            new Promise<void>((resolve, reject) => {
+                pubClient.once("ready", resolve);
+                pubClient.once("error", reject);
+            }),
+            new Promise<void>((resolve, reject) => {
+                subClient.once("ready", resolve);
+                subClient.once("error", reject);
+            })
+        ]);
+
+        io.adapter(createAdapter(pubClient, subClient));
+        logger.info("[SOCKET.IO] Redis adapter attached — horizontal scaling enabled");
     } catch (err) {
-        logger.warn({ err }, '[SOCKET.IO] Could not create Redis adapter clients — running in single-instance mode');
+        logger.warn({ err }, 'Redis unavailable');
     }
-
     // ── Auth Middleware ─────────────────────────────────────────────────────
+
     io.use(socketAuthMiddleware);
 
     // ── Connection Handler ──────────────────────────────────────────────────

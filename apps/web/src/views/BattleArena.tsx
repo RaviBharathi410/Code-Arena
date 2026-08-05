@@ -1,12 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { useMatch } from '../contexts/MatchContext';
-import { useVoiceToCode } from '../hooks/useVoiceToCode';
 import { useNav } from '../navigation/NavigationContext';
 import { 
-    Zap, Mic, MicOff, Terminal, Activity, 
-    ChevronRight, Timer, Cpu, Shield, 
-    Play, CheckCircle2, X
+    Zap, Terminal, 
+    Play, CheckCircle2
 } from 'lucide-react';
 import { ProblemPanel } from '../components/arena/ProblemPanel';
 import { AnalysisPanel } from '../components/arena/AnalysisPanel';
@@ -14,13 +12,12 @@ import { Countdown } from '../components/arena/Countdown';
 import { ResultOverlay } from '../components/arena/ResultOverlay';
 import { NeonButton } from '../components/ui/NeonButton';
 import { GlassCard } from '../components/ui/GlassCard';
-import { VoiceVisualizer } from '../components/ui/VoiceVisualizer';
-import { ChevronLeft, ChevronRight as ChevronRightIcon, Layout, Columns } from 'lucide-react';
+import { ChevronLeft, ChevronRight as ChevronRightIcon, Layout, Columns, Wand2 } from 'lucide-react';
 import type { User } from '../types';
-import gsap from 'gsap';
+import { VoiceWorkspaceModal } from '../components/arena/VoiceWorkspaceModal';
 
 export const BattleArena: React.FC<{ currentUser: User }> = ({ currentUser }) => {
-    const { state, setReady, setLanguage, runCode, submitCode, sendTyping, sendSpeaking, reset } = useMatch();
+    const { state, setReady, runCode, submitCode, sendTyping, reset } = useMatch();
     const { goToDashboard } = useNav();
 
     const opponent = state.players.find(p => p.id !== currentUser.id);
@@ -32,6 +29,7 @@ export const BattleArena: React.FC<{ currentUser: User }> = ({ currentUser }) =>
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showProblem, setShowProblem] = useState(true);
     const [showAnalysis, setShowAnalysis] = useState(true);
+    const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
 
     // Initial code setup when problem loads
     useEffect(() => {
@@ -69,14 +67,9 @@ export const BattleArena: React.FC<{ currentUser: User }> = ({ currentUser }) =>
         sendTyping(newCode.split('\n').length);
     };
 
-    const { isListening, startListening, stopListening } = useVoiceToCode((newCode) => {
-        if (newCode === '__CLEAR__') setCode('');
-        else setCode(prev => prev + '\n' + newCode);
-    });
-
-    useEffect(() => {
-        sendSpeaking(isListening);
-    }, [isListening, sendSpeaking]);
+    const handleAddGeneratedCode = (generatedCode: string) => {
+        setCode(prev => prev ? prev + '\n' + generatedCode : generatedCode);
+    };
 
     if (state.status === 'idle' || state.status === 'waiting') {
         return (
@@ -210,12 +203,12 @@ export const BattleArena: React.FC<{ currentUser: User }> = ({ currentUser }) =>
                 {/* Right: Actions & Tools */}
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
-                        <VoiceVisualizer isActive={isListening} color="#8b5cf6" />
                         <button 
-                            onClick={isListening ? stopListening : startListening}
-                            className={`p-2.5 rounded-xl border transition-all ${isListening ? 'bg-accent-secondary/15 border-accent-secondary/40 text-accent-secondary' : 'bg-white/5 border-white/10 text-gray-500 hover:text-white'}`}
+                            onClick={() => setIsVoiceModalOpen(true)}
+                            className="px-4 py-2.5 rounded-xl border transition-all bg-accent-secondary/10 border-accent-secondary/30 text-accent-secondary hover:bg-accent-secondary/20 flex items-center gap-2 font-black uppercase tracking-widest text-[10px]"
+                            title="Open Neural Voice Engine"
                         >
-                            {isListening ? <Mic size={18} /> : <MicOff size={18} />}
+                            <Wand2 size={14} /> Voice Coder
                         </button>
                     </div>
 
@@ -341,6 +334,13 @@ export const BattleArena: React.FC<{ currentUser: User }> = ({ currentUser }) =>
                     )}
                 </div>
             </main>
+
+            <VoiceWorkspaceModal 
+                isOpen={isVoiceModalOpen} 
+                onClose={() => setIsVoiceModalOpen(false)} 
+                currentLanguage={language} 
+                onAddCode={handleAddGeneratedCode} 
+            />
         </div>
     );
 };

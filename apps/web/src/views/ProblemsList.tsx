@@ -5,7 +5,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import api from '../lib/api';
 import { Search, Cpu, Zap, Target, Sword, ArrowLeft } from 'lucide-react';
 import { gsap } from 'gsap';
-import { useLayout } from '../components/layout/MainLayout';
+import { useLayout } from '../contexts/LayoutContext';
 
 interface Problem {
     id: string;
@@ -150,7 +150,7 @@ export const ProblemsList: React.FC = () => {
                     {/* Difficulty Filters & Random Selection */}
                     <div className="flex flex-col md:flex-row gap-4">
                         <div className={`flex p-1 border rounded-2xl backdrop-blur-md ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/10'}`}>
-                            {['all', 'easy', 'medium', 'hard'].map(diff => (
+                            {['all', 'easy', 'medium', 'hard', 'extreme'].map(diff => (
                                 <button
                                     key={diff}
                                     onClick={() => { setDifficultyFilter(diff); setPage(0); }}
@@ -161,6 +161,7 @@ export const ProblemsList: React.FC = () => {
                                             diff === 'easy' ? 'hover:text-green-500' :
                                             diff === 'medium' ? 'hover:text-amber-500' :
                                             diff === 'hard' ? 'hover:text-red-500' :
+                                            diff === 'extreme' ? 'hover:text-fuchsia-400' :
                                             'hover:text-accent-secondary'
                                         }`}
                                 >
@@ -202,21 +203,24 @@ export const ProblemsList: React.FC = () => {
                         </div>
                     ) : (
                         <div className="flex flex-col gap-4 pb-12">
-                            {displayProblems.map((prob) => (
-                                <GlassCard key={prob.id} className={`problem-card group hover:border-accent-secondary/50 transition-all p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#12121a] border-white/10 hover:bg-[#1a1a24] hover:border-white/40 shadow-xl'}`}>
+                            {displayProblems.map((prob: any) => {
+                                const displayId = (prob.id || prob._id || '').toString();
+                                return (
+                                <GlassCard key={displayId} className={`problem-card group hover:border-accent-secondary/50 transition-all p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#12121a] border-white/10 hover:bg-[#1a1a24] hover:border-white/40 shadow-xl'}`}>
                                     <div className="flex-1 flex flex-col md:flex-row items-center gap-8 relative z-10 w-full">
                                         <div className="flex flex-col items-center md:items-start min-w-[200px]">
                                             <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border mb-3 ${
-                                                prob.difficulty.toLowerCase() === 'easy' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                                prob.difficulty.toLowerCase() === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                                                'bg-red-500/10 text-red-500 border-red-500/20'
+                                                prob.difficulty?.toLowerCase() === 'easy' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
+                                                prob.difficulty?.toLowerCase() === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                                prob.difficulty?.toLowerCase() === 'hard' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                                'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
                                             }`}>
                                                 {prob.difficulty}
                                             </span>
                                             <h3 className={`text-xl font-black uppercase tracking-tighter group-hover:text-accent-secondary transition-colors line-clamp-1 ${isLight ? 'text-black' : 'text-white'}`}>
                                                 {prob.title}
                                             </h3>
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">MODULE ID: {prob.id.slice(0, 8)}</p>
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">MODULE ID: {displayId.slice(0, 8)}</p>
                                         </div>
                                         
                                         <div className="flex-1 hidden lg:block">
@@ -228,13 +232,13 @@ export const ProblemsList: React.FC = () => {
 
                                     <div className="relative z-10 flex flex-row gap-3 w-full md:w-auto">
                                         <button
-                                            onClick={() => goToArenaPractice(prob.id)}
+                                            onClick={() => goToArenaPractice(displayId)}
                                             className={`flex-1 md:w-48 py-3 rounded-xl border text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-95 ${isLight ? 'bg-black text-white border-black hover:bg-accent-secondary hover:border-accent-secondary' : 'bg-white/5 border-white/10 text-white hover:bg-white hover:text-black hover:border-white'}`}
                                         >
                                             <Cpu size={14} /> Practice
                                         </button>
                                         <button
-                                            onClick={() => goToOpponents(prob.id)}
+                                            onClick={() => goToOpponents(displayId)}
                                             className={`flex-1 md:w-48 py-3 rounded-xl border text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-95 ${isLight ? 'bg-accent-secondary/10 border-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary hover:text-black' : 'bg-accent-secondary/10 border-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary hover:text-black'}`}
                                         >
                                             <Sword size={14} /> Challenge
@@ -244,7 +248,8 @@ export const ProblemsList: React.FC = () => {
                                     {/* Subtle background glow */}
                                     <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-accent-secondary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </GlassCard>
-                            ))}
+                                );
+                            })}
                             
                             {/* Infinite Scroll Trigger */}
                             {hasMore && (

@@ -1,9 +1,8 @@
-import { db } from '../../db';
-import { matchRooms, users, submissions, rankHistory, problems } from '@arena/database';
-import { eq, and, or, desc, sql } from 'drizzle-orm';
-import crypto from 'crypto';
-import { logger } from '../../lib/logger';
-import { redis } from '../../lib/redis';
+import { MatchRoom } from '../../models/MatchRoom';
+import { User } from '../../models/User';
+import { Submission } from '../../models/Submission';
+import { RankHistory } from '../../models/RankHistory';
+import { Problem } from '../../models/Problem';
 
 export class MatchesService {
     private readonly ROOM_TTL = 7200;
@@ -14,49 +13,49 @@ export class MatchesService {
 
         let problemId = data.problemId;
         if (!problemId) {
-            const [randomProblem] = await db.select().from(problems).orderBy(sql`RANDOM()`).limit(1);
+            const [randomProblem] = await Problem.aggregate([{ $sample: { size: 1 } }]);
             if (!randomProblem) {
                 logger.warn('[MATCHES] No problems found in database, using fallback null (will fail if notNull)');
             }
-            problemId = randomProblem?.id;
+            problemId = randomProblem?._id;
         }
 
-        const [newRoom] = await db.insert(matchRooms).values({
-            id,
+        const newRoom = await MatchRoom.create({
+            _id: id,
             roomCode,
             mode: data.mode,
             status: data.mode === 'practice' ? 'active' : 'waiting',
             startedAt: data.mode === 'practice' ? new Date() : null,
             player1Id: data.player1Id,
             problemId: problemId as string,
-        }).returning();
+        });
 
         await redis.setex(`room:${id}:ready:${data.player1Id}`, this.ROOM_TTL, 'false');
         return newRoom;
     }
 
     async joinMatchRoom(roomCode: string, userId: string) {
-        const room = await db.query.matchRooms.findFirst({ where: eq(matchRooms.roomCode, roomCode) });
+        const room = await MatchRoom.findOne({ roomCode }).lean();
         if (!room) throw new Error('Room not found');
         if (room.status !== 'waiting') throw new Error('Match already started or ended');
         if (room.player1Id === userId) return room;
         if (room.player2Id && room.player2Id !== userId) throw new Error('Room is full');
 
-        const [updatedRoom] = await db.update(matchRooms).set({ player2Id: userId }).where(eq(matchRooms.id, room.id)).returning();
-        await redis.setex(`room:${room.id}:ready:${userId}`, this.ROOM_TTL, 'false');
+        const updatedRoom = await MatchRoom.findByIdAndUpdate(room._id, { $set: { player2Id: userId } }, { new: true }).lean();
+        await redis.setex(`room:${room._id}:ready:${userId}`, this.ROOM_TTL, 'false');
         return updatedRoom;
     }
 
     async setReady(roomId: string, userId: string, isReady: boolean = true) {
         await redis.setex(`room:${roomId}:ready:${userId}`, this.ROOM_TTL, isReady.toString());
-        const room = await db.query.matchRooms.findFirst({ where: eq(matchRooms.id, roomId) });
+        const room = await MatchRoom.findById(roomId).lean();
         if (!room || !room.player2Id) return { room, bothReady: false };
 
         const p1Ready = await redis.get(`room:${roomId}:ready:${room.player1Id}`);
         const p2Ready = await redis.get(`room:${roomId}:ready:${room.player2Id}`);
 
         if (p1Ready === 'true' && p2Ready === 'true') {
-            await db.update(matchRooms).set({ status: 'active', startedAt: new Date() }).where(eq(matchRooms.id, roomId));
+            await MatchRoom.updateOne({ _id: roomId }, { $set: { status: 'active', startedAt: new Date() } });
             await redis.setex(`match:${roomId}:startedAt`, this.ROOM_TTL, Date.now().toString());
             return { room, bothReady: true };
         }
@@ -64,19 +63,13 @@ export class MatchesService {
     }
 
     async getMatchById(id: string) {
-        return db.query.matchRooms.findFirst({
-            where: eq(matchRooms.id, id),
-            with: { player1: true, player2: true, problem: true, submissions: true }
-        });
+        return MatchRoom.findById(id).lean();
     }
 
     async getUserMatches(userId: string, limit = 10) {
-        return db.query.matchRooms.findMany({
-            where: or(eq(matchRooms.player1Id, userId), eq(matchRooms.player2Id, userId)),
-            orderBy: [desc(matchRooms.createdAt)],
-            limit,
-            with: { player1: true, player2: true, problem: true }
-        });
+        return MatchRoom.find({
+            $or: [{ player1Id: userId }, { player2Id: userId }]
+        }).sort({ createdAt: -1 }).limit(limit).lean();
     }
 
     async calculateMatchResult(matchId: string) {
@@ -84,15 +77,13 @@ export class MatchesService {
         if (!room || !room.player1Id || !room.player2Id) return;
 
         // Fetch best submissions for both players
-        const p1Sub = await db.query.submissions.findFirst({
-            where: and(eq(submissions.matchId, matchId), eq(submissions.userId, room.player1Id), eq(submissions.status, 'ACCEPTED')),
-            orderBy: [desc(submissions.finalScore)]
-        });
+        const p1Sub = await Submission.findOne({
+            matchId, userId: room.player1Id, status: 'ACCEPTED'
+        }).sort({ finalScore: -1 }).lean();
 
-        const p2Sub = await db.query.submissions.findFirst({
-            where: and(eq(submissions.matchId, matchId), eq(submissions.userId, room.player2Id), eq(submissions.status, 'ACCEPTED')),
-            orderBy: [desc(submissions.finalScore)]
-        });
+        const p2Sub = await Submission.findOne({
+            matchId, userId: room.player2Id, status: 'ACCEPTED'
+        }).sort({ finalScore: -1 }).lean();
 
         const p1Score = p1Sub?.finalScore || 0;
         const p2Score = p2Sub?.finalScore || 0;
@@ -105,11 +96,11 @@ export class MatchesService {
             winnerId = room.player1DoneAt! < room.player2DoneAt! ? room.player1Id : room.player2Id;
         }
 
-        await db.update(matchRooms).set({ 
+        await MatchRoom.updateOne({ _id: matchId }, { $set: { 
             winnerId, 
             status: 'completed', 
             endedAt: new Date() 
-        }).where(eq(matchRooms.id, matchId));
+        }});
 
         // Elo and Rank Updates
         let deltaP1 = 0, deltaP2 = 0;
@@ -133,8 +124,8 @@ export class MatchesService {
     }
 
     private async updateRankings(p1Id: string, p2Id: string, winnerId: string, matchId: string) {
-        const p1 = await db.query.users.findFirst({ where: eq(users.id, p1Id) });
-        const p2 = await db.query.users.findFirst({ where: eq(users.id, p2Id) });
+        const p1 = await User.findById(p1Id).lean();
+        const p2 = await User.findById(p2Id).lean();
         if (!p1 || !p2) return;
 
         const K = 32;
@@ -161,30 +152,74 @@ export class MatchesService {
         };
 
         // Update User 1
-        await db.update(users).set({
+        await User.updateOne({ _id: p1Id }, { $set: {
             rankRating: newRatingP1,
             wins: (p1.wins || 0) + actualP1,
             losses: (p1.losses || 0) + (1 - actualP1),
             totalBattles: (p1.totalBattles || 0) + 1,
             tier: updateTier(newRatingP1)
-        }).where(eq(users.id, p1Id));
+        }});
 
         // Update User 2
-        await db.update(users).set({
+        await User.updateOne({ _id: p2Id }, { $set: {
             rankRating: newRatingP2,
             wins: (p2.wins || 0) + actualP2,
             losses: (p2.losses || 0) + (1 - actualP2),
             totalBattles: (p2.totalBattles || 0) + 1,
             tier: updateTier(newRatingP2)
-        }).where(eq(users.id, p2Id));
+        }});
 
         // History
-        await db.insert(rankHistory).values([
+        await RankHistory.insertMany([
             { userId: p1Id, matchId, delta: deltaP1, newRating: newRatingP1, reason: 'MATCH_COMPLETE' },
             { userId: p2Id, matchId, delta: deltaP2, newRating: newRatingP2, reason: 'MATCH_COMPLETE' }
         ]);
 
         return { deltaP1, deltaP2, newRatingP1, newRatingP2 };
+    }
+
+    async getRecentMatches(userId: string, limit = 10) {
+        return this.getUserMatches(userId, limit);
+    }
+
+    async forfeitMatch(matchId: string, forfeitingUserId: string) {
+        const room = await this.getMatchById(matchId);
+        if (!room) throw new Error('Match not found');
+        if (room.status !== 'active') throw new Error('Match is not active');
+        if (room.player1Id !== forfeitingUserId && room.player2Id !== forfeitingUserId) {
+            throw new Error('Forbidden: You are not a player in this match');
+        }
+
+        const winnerId = room.player1Id === forfeitingUserId ? room.player2Id : room.player1Id;
+        if (!winnerId) {
+            await MatchRoom.updateOne({ _id: matchId }, { $set: {
+                status: 'completed',
+                endedAt: new Date()
+            }});
+            return { winnerId: null, status: 'completed' };
+        }
+
+        await MatchRoom.updateOne({ _id: matchId }, { $set: {
+            winnerId,
+            status: 'completed',
+            endedAt: new Date()
+        }});
+
+        let deltaP1 = 0, deltaP2 = 0;
+        if (room.mode === 'ranked') {
+            const deltas = await this.updateRankings(room.player1Id, room.player2Id as string, winnerId, matchId);
+            deltaP1 = deltas?.deltaP1 ?? 0;
+            deltaP2 = deltas?.deltaP2 ?? 0;
+        }
+
+        return {
+            winnerId,
+            status: 'completed',
+            deltaP1,
+            deltaP2,
+            player1Id: room.player1Id,
+            player2Id: room.player2Id
+        };
     }
 }
 

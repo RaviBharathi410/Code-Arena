@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User } from '../types';
 import api from '../lib/api';
+import SafeSessionStorage from '../lib/storage';
 
 interface AuthState {
     user: User | null;
@@ -23,7 +24,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             token: null,
             isAuthenticated: false,
-            authLoading: false,
+            authLoading: true,
             authError: null,
 
             setAuth: (user: User, accessToken: string) => set({
@@ -40,6 +41,7 @@ export const useAuthStore = create<AuthState>()(
                 } catch (e) {
                     console.error('Logout error', e);
                 } finally {
+                    SafeSessionStorage.removeItem('arena_logo_shown_fixed');
                     set({
                         user: null,
                         token: null,
@@ -52,7 +54,10 @@ export const useAuthStore = create<AuthState>()(
 
             fetchProfile: async () => {
                 const token = get().token;
-                if (!token) return;
+                if (!token) {
+                    set({ user: null, isAuthenticated: false, authError: null, authLoading: false });
+                    return;
+                }
 
                 if (token === 'local-token') {
                     get().logout();
@@ -61,9 +66,7 @@ export const useAuthStore = create<AuthState>()(
 
                 set({ authLoading: true, authError: null });
                 try {
-                    const response = await api.get('/auth/me', {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
+                    const response = await api.get('/auth/me');
                     set({ user: response.data, authLoading: false });
                 } catch (error: any) {
                     const message = error?.response?.data?.message || error?.message || 'Failed to fetch profile';
@@ -91,6 +94,20 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'arena-auth-storage',
+            version: 2,
+            migrate: (persistedState: any, version: number) => {
+                if (version < 2) {
+                    console.log('[AUTH] Migrated to JWT Auth V2: Invalidating stale local sessions.');
+                    return {
+                        user: null,
+                        token: null,
+                        isAuthenticated: false,
+                        authLoading: false,
+                        authError: null,
+                    };
+                }
+                return persistedState as any;
+            }
         }
     )
 );

@@ -1,8 +1,8 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { bullmqConnection } from './connection';
-import { db } from '../db';
-import { users } from '@arena/database';
-import { eq } from 'drizzle-orm';
+import { User } from '../models/User';
+import { MatchRoom } from '../models/MatchRoom';
+import { Problem } from '../models/Problem';
 import { logger } from '../lib/logger';
 import { createBullMQRedisClient } from '../lib/redis';
 
@@ -30,78 +30,92 @@ export const analyticsQueue = new Queue<AnalyticsJobData>('analytics', {
     },
 });
 
-// ── Skill Vector Structure ─────────────────────────────────────────────────
-
-interface SkillVector {
-    easy: { wins: number; total: number };
-    medium: { wins: number; total: number };
-    hard: { wins: number; total: number };
-    avgExecutionTime: number;
-    totalMatches: number;
-    preferredLanguages: Record<number, number>; // languageId → count
-    lastUpdated: string;
-}
-
-const DEFAULT_SKILL_VECTOR: SkillVector = {
-    easy: { wins: 0, total: 0 },
-    medium: { wins: 0, total: 0 },
-    hard: { wins: 0, total: 0 },
-    avgExecutionTime: 0,
-    totalMatches: 0,
-    preferredLanguages: {},
-    lastUpdated: new Date().toISOString(),
-};
-
 // ── Worker ─────────────────────────────────────────────────────────────────
 
 export const analyticsWorker = new Worker<AnalyticsJobData>(
     'analytics',
     async (job: Job<AnalyticsJobData>) => {
-        const { userId, matchId, problemDifficulty, result, executionTime, languageId } = job.data;
+        const { userId, matchId, problemDifficulty, result } = job.data;
 
         logger.info({ userId, matchId, jobId: job.id }, '[QUEUE:ANALYTICS] Processing skill vector update');
 
-        // 1. Fetch current skill vector from DB
-        const user = await db.query.users.findFirst({
-            where: eq(users.id, userId),
-            columns: { skillVector: true },
-        });
+        // 1. Fetch category and difficulty
+        let category = 'arrays';
+        let difficulty = problemDifficulty || 'easy';
 
-        const currentVector: SkillVector = (user?.skillVector as SkillVector) || { ...DEFAULT_SKILL_VECTOR };
-
-        // 2. Update difficulty-specific stats
-        const difficulty = problemDifficulty.toLowerCase() as 'easy' | 'medium' | 'hard';
-        if (currentVector[difficulty]) {
-            currentVector[difficulty].total += 1;
-            if (result === 'win') {
-                currentVector[difficulty].wins += 1;
+        if (matchId) {
+            const match = await MatchRoom.findById(matchId).populate('problemId').lean();
+            const problem = match?.problemId as any;
+            if (problem) {
+                category = problem.category || category;
+                difficulty = problem.difficulty || difficulty;
             }
         }
 
-        // 3. Update aggregate stats
-        currentVector.totalMatches += 1;
+        // 2. Fetch current user skill vector and elo rating
+        const user = await User.findById(userId).lean();
 
-        if (executionTime !== null) {
-            // Running average of execution time
-            const prevTotal = currentVector.totalMatches - 1;
-            currentVector.avgExecutionTime =
-                (currentVector.avgExecutionTime * prevTotal + executionTime) / currentVector.totalMatches;
+        if (!user) {
+            throw new Error(`User not found: ${userId}`);
         }
 
-        // 4. Track preferred languages
-        currentVector.preferredLanguages[languageId] =
-            (currentVector.preferredLanguages[languageId] || 0) + 1;
+        const currentVector = (user.skillVector as Record<string, number> | null) || {
+            arrays: 1000,
+            strings: 1000,
+            trees: 1000,
+            graphs: 1000,
+            dp: 1000,
+            math: 1000,
+            sorting: 1000,
+            hashing: 1000,
+        };
 
-        currentVector.lastUpdated = new Date().toISOString();
+        const catKey = category.toLowerCase();
+        if (currentVector[catKey] === undefined) {
+            currentVector[catKey] = 1000;
+        }
 
-        // 5. Write back to PostgreSQL (jsonb column)
-        await db.update(users)
-            .set({ skillVector: currentVector })
-            .where(eq(users.id, userId));
+        // 3. ELO-style per-category update
+        const K = result === 'win' ? 32 : 16;
+        const actual = result === 'win' ? 1 : 0;
 
-        logger.info({ userId, totalMatches: currentVector.totalMatches }, '[QUEUE:ANALYTICS] Skill vector updated');
+        const diffMap: Record<string, number> = {
+            easy: 1000,
+            medium: 1400,
+            hard: 1800,
+        };
+        const diffRating = diffMap[difficulty.toLowerCase()] || 1200;
 
-        return currentVector;
+        const currentCatRating = currentVector[catKey];
+        const expected = 1 / (1 + Math.pow(10, (diffRating - currentCatRating) / 400));
+        const delta = Math.round(K * (actual - expected));
+
+        const newCatRating = Math.max(100, Math.min(3000, currentCatRating + delta));
+        currentVector[catKey] = newCatRating;
+
+        // 4. Update overall ELO and stats
+        const isWin = result === 'win';
+        const newElo = Math.max(100, Math.min(3000, user.eloRating + (isWin ? 32 : -16)));
+        const newMatchesPlayed = user.matchesPlayed + 1;
+        const newMatchesWon = user.matchesWon + (isWin ? 1 : 0);
+
+        await User.updateOne({ _id: userId }, {
+            $set: {
+                skillVector: currentVector,
+                eloRating: newElo,
+                matchesPlayed: newMatchesPlayed,
+                matchesWon: newMatchesWon,
+            }
+        });
+
+        logger.info({ userId, category: catKey, prevRating: currentCatRating, newRating: newCatRating, elo: newElo }, '[QUEUE:ANALYTICS] Skill vector and ELO updated in DB');
+
+        return {
+            skillVector: currentVector,
+            eloRating: newElo,
+            matchesPlayed: newMatchesPlayed,
+            matchesWon: newMatchesWon,
+        };
     },
     {
         connection: createBullMQRedisClient(),

@@ -8,6 +8,19 @@ const api = axios.create({
     withCredentials: true,
 });
 
+api.interceptors.request.use(
+    async (config) => {
+        // Use dynamic import/getState to avoid circular dependency
+        const { useAuthStore } = await import('../store/useAuthStore');
+        const token = useAuthStore.getState().token;
+        if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
 api.interceptors.response.use(
     (response) => {
         return response;
@@ -15,50 +28,39 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // If the error is 401 and we haven't retried yet
-        if (error.response && error.response.status === 401 && !originalRequest._retry) {
-            // Ignore refresh logic if the request itself was for logging in, refreshing, or logging out
-            if (
-                originalRequest.url?.includes('/auth/login') || 
-                originalRequest.url?.includes('/auth/refresh') || 
-                originalRequest.url?.includes('/auth/register') ||
-                originalRequest.url?.includes('/auth/logout')
-            ) {
-                return Promise.reject(error);
-            }
+        const isLogoutRequest = originalRequest.url?.includes('/auth/logout');
 
+        if (error.response && error.response.status === 401 && !originalRequest._retry && !isLogoutRequest) {
             originalRequest._retry = true;
 
             try {
-                // Important: use a separate axios instance or raw axios 
-                // to avoid infinite interceptor loops
-                const rs = await axios.post(`${BASE_URL}/auth/refresh`, {}, {
-                    withCredentials: true
-                });
+                // Call our custom refresh endpoint
+                const response = await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
+                
+                if (!response.data || !response.data.accessToken) {
+                    throw new Error('No token returned');
+                }
 
-                const { accessToken } = rs.data;
+                const accessToken = response.data.accessToken;
 
-                // Update the Zustand store using dynamic import/getState
-                // to avoid top-level circular dependencies
+                // Update our global state with the new token
                 const { useAuthStore } = await import('../store/useAuthStore');
                 const store = useAuthStore.getState();
-                
                 if (store.user) {
                     store.setAuth(store.user, accessToken);
                 }
 
-                // Update Authorization header for the original request
+                // Retry the failed request with the fresh token
                 if (originalRequest.headers) {
                     originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 }
 
                 return api(originalRequest);
-            } catch (refreshError) {
+            } catch (err) {
                 console.warn('Silent refresh failed. Session expired.');
-                // Wipe user session
                 const { useAuthStore } = await import('../store/useAuthStore');
                 useAuthStore.getState().logout();
-                return Promise.reject(refreshError);
+                return Promise.reject(err);
             }
         }
         return Promise.reject(error);

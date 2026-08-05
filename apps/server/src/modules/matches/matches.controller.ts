@@ -43,6 +43,16 @@ export class MatchesController {
             res.status(500).json({ message: err.message });
         }
     }
+
+    async getUserMatches(req: Request, res: Response) {
+        try {
+            const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+            const matches = await matchesService.getUserMatches(req.params.userId, limit);
+            res.json(matches);
+        } catch (err: any) {
+            res.status(500).json({ message: err.message });
+        }
+    }
 }
 
 export const matchesController = new MatchesController();

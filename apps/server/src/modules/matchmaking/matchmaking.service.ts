@@ -1,13 +1,12 @@
 import { redis } from '../../lib/redis';
 import { logger } from '../../lib/logger';
-import { db } from '../../db';
-import { matchRooms } from '@arena/database';
 import crypto from 'crypto';
 import { Server } from 'socket.io';
 import { problemsService } from '../problems/problems.service';
 import { matchmakingQueue, type MatchPair } from '../../lib/matchmaking-queue';
 import { matchesService } from '../matches/matches.service';
-
+import { User } from '../../models/User';
+import { Problem } from '../../models/Problem';
 export class MatchmakingService {
     constructor(private io: Server) {
         matchmakingQueue.onMatch((pair: MatchPair) => {
@@ -38,8 +37,16 @@ export class MatchmakingService {
 
             logger.info({ roomId: room.id, player1Id, player2Id }, '[MATCHMAKING] Match room created');
 
-            if (!fullRoom || !fullRoom.player1 || !fullRoom.player2) {
+            if (!fullRoom || !fullRoom.player1Id || !fullRoom.player2Id) {
                 throw new Error('Match intel corrupted after creation');
+            }
+
+            const p1 = await User.findById(fullRoom.player1Id).lean();
+            const p2 = await User.findById(fullRoom.player2Id).lean();
+            const problem = await Problem.findById(fullRoom.problemId).lean();
+
+            if (!p1 || !p2 || !problem) {
+                throw new Error('Match entities missing');
             }
 
             const matchData = {
@@ -47,10 +54,10 @@ export class MatchmakingService {
                 roomId: room.id,
                 matchId: room.id,
                 players: [
-                    { id: fullRoom.player1.id, username: fullRoom.player1.username, tier: fullRoom.player1.tier, rating: fullRoom.player1.rankRating },
-                    { id: fullRoom.player2.id, username: fullRoom.player2.username, tier: fullRoom.player2.tier, rating: fullRoom.player2.rankRating }
+                    { id: p1._id, username: p1.username, tier: p1.tier, rating: p1.rankRating },
+                    { id: p2._id, username: p2.username, tier: p2.tier, rating: p2.rankRating }
                 ],
-                problem: fullRoom.problem
+                problem: problem
             };
 
             // Notify both players

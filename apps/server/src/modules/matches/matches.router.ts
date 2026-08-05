@@ -7,6 +7,7 @@ const router = Router();
 router.post('/create', requireAuth, matchesController.create);
 router.post('/join', requireAuth, matchesController.join);
 router.get('/my', requireAuth, matchesController.getMyMatches);
+router.get('/user/:userId', requireAuth, matchesController.getUserMatches);
 router.get('/:id', requireAuth, matchesController.getById);
 
 export default router;

@@ -19,7 +19,7 @@ export class UsersController {
             const { passwordHash, ...safeUser } = user;
             res.json(safeUser);
         } catch (err: any) {
-            if (err?.code === '23505' || err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            if (err?.code === 11000) {
                 return res.status(409).json({ message: 'Username or email already taken' });
             }
             res.status(err.message === 'User not found' ? 404 : 500).json({ message: err.message });
@@ -41,7 +41,7 @@ export class UsersController {
             const matches = await matchesService.getUserMatches(req.params.id);
 
             const totalMatches = matches.length;
-            const wins = matches.filter(m => m.winnerId === req.params.id).length;
+            const wins = matches.filter((m: any) => m.winnerId === req.params.id).length;
             const winRate = totalMatches > 0 ? (wins / totalMatches) * 100 : 0;
 
             res.json({

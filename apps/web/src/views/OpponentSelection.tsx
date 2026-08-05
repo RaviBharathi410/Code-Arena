@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNav } from '../navigation/NavigationContext';
-import { useSocket } from '../contexts/SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import { gsap } from 'gsap';
 import { Users, Zap, Target, Search, Menu, Clock, User as UserIcon } from 'lucide-react';
-import { useLayout } from '../components/layout/MainLayout';
+import { useLayout } from '../contexts/LayoutContext';
 import type { User } from '../types';
 
 export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
@@ -13,13 +13,7 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
     const { connect, connected, on, emit } = useSocket();
 
     // Local State
-    const [onlineUsers, setOnlineUsers] = useState<any[]>([
-        { id: 'mock-1', username: 'Ghost_Runner_32', rating: 4820, tier: 'ARCHITECT III', wins: 312 },
-        { id: 'mock-2', username: 'NeonShadow_X', rating: 4611, tier: 'ARCHITECT II', wins: 289 },
-        { id: 'mock-3', username: 'CipherKnight', rating: 4430, tier: 'ARCHITECT I', wins: 261 },
-        { id: 'mock-4', username: 'VoidPulse_9', rating: 4205, tier: 'ELITE V', wins: 238 },
-        { id: 'mock-5', username: 'QuantumByte', rating: 3980, tier: 'ELITE IV', wins: 215 },
-    ]);
+    const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedOpponent, setSelectedOpponent] = useState<any | null>(null);
     const [isWaiting, setIsWaiting] = useState(false);
@@ -161,7 +155,7 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                                                 {opp.username[0].toUpperCase()}
                                             </div>
                                             <div>
-                                                <h3 className={`font-black text-2xl uppercase tracking-tighter transition-colors text-white`}>{opp.username}</h3>
+                                                <h3 className={`font-black text-2xl uppercase tracking-tighter transition-colors ${isLight ? 'text-black' : 'text-white'}`}>{opp.username}</h3>
                                                 <div className="flex items-center gap-2 text-[9px] text-accent-secondary uppercase font-black tracking-[0.2em]">
                                                     <div className="w-1.5 h-1.5 rounded-full bg-accent-secondary animate-pulse" /> Uplink Active
                                                 </div>
@@ -170,11 +164,11 @@ export const OpponentSelection: React.FC<{ currentUser: User }> = ({ currentUser
                                         <div className="flex justify-between items-end relative z-10">
                                             <div className="space-y-1">
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Skill Tier</p>
-                                                <p className={`font-black text-lg text-white`}>{opp.tier || 'ARCHITECT III'}</p>
+                                                <p className={`font-black text-lg ${isLight ? 'text-gray-800' : 'text-white'}`}>{opp.tier || 'ARCHITECT III'}</p>
                                             </div>
                                             <div className="text-right space-y-1">
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Global Rank</p>
-                                                <p className={`text-4xl font-black tracking-tighter text-white`}>{opp.rating?.toLocaleString() || '1,000'} <span className="text-accent-secondary text-lg">RP</span></p>
+                                                <p className={`text-4xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{opp.rating?.toLocaleString() || '1,000'} <span className="text-accent-secondary text-lg">RP</span></p>
                                             </div>
                                         </div>
                                         {/* Dynamic scanline effect for selected state */}
