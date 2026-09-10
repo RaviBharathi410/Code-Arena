@@ -5,6 +5,7 @@ import type { Problem, MatchStatus, User, MatchResult } from '../types';
 // ── State ─────────────────────────────────────────────────────────────────
 
 interface MatchState {
+    matchType: string;
     roomId: string | null;
     roomCode: string | null;
     status: MatchStatus | 'idle' | 'searching';
@@ -44,6 +45,7 @@ const initialState: MatchState = {
     startedAt: null,
     durationMs: 0,
     error: null,
+    matchType: ''
 };
 
 // ── Actions ───────────────────────────────────────────────────────────────
