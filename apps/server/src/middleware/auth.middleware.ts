@@ -7,6 +7,7 @@ export interface AuthRequest extends Request {
         id: string;
         username: string;
         role: string;
+        isDemo?: boolean;
     };
 }
 
@@ -18,20 +19,32 @@ export interface AuthRequest extends Request {
 
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    let token = '';
+
+    if (header && header.startsWith('Bearer ')) {
+        token = header.slice(7).trim();
+    } else if (req.cookies?.accessToken) {
+        token = req.cookies.accessToken;
+    } else if (req.cookies?.token) {
+        token = req.cookies.token;
+    }
+
+    if (!token) {
         return res.status(401).json({ error: 'No token' });
     }
 
-    const token = header.slice(7);
     try {
         const payload = jwt.verify(token, env.JWT_SECRET) as any;
+
         req.user = {
-            id: payload.sub,
-            username: payload.username || 'operator',
+            id: payload.sub || payload.id || payload._id,
+            username: payload.username,
             role: payload.role || 'user',
+            isDemo: Boolean(payload.isDemo),
         };
+
         next();
-    } catch (err: any) {
+    } catch (err) {
         return res.status(401).json({ error: 'Invalid token' });
     }
 };

@@ -29,24 +29,24 @@ export const LogoReveal: React.FC<{ onComplete: () => void }> = ({ onComplete })
             });
 
             // Initial states
-            gsap.set(logoRef.current, { 
-                opacity: 0, 
-                scale: 0.7, 
+            gsap.set(logoRef.current, {
+                opacity: 0,
+                scale: 0.7,
                 rotate: -15,
-                filter: 'drop-shadow(0 0 0px rgba(0, 240, 255, 0))' 
+                filter: 'drop-shadow(0 0 0px rgba(0, 240, 255, 0))'
             });
-            gsap.set(textRef.current, { 
-                opacity: 0, 
+            gsap.set(textRef.current, {
+                opacity: 0,
                 letterSpacing: '0.1em',
                 y: 15,
                 filter: 'blur(8px)'
             });
-            gsap.set(subtitleRef.current, { 
-                opacity: 0, 
-                y: 10 
+            gsap.set(subtitleRef.current, {
+                opacity: 0,
+                y: 10
             });
-            gsap.set(progressRef.current, { 
-                width: '0%' 
+            gsap.set(progressRef.current, {
+                width: '0%'
             });
 
             // Reveal Timeline
@@ -58,38 +58,38 @@ export const LogoReveal: React.FC<{ onComplete: () => void }> = ({ onComplete })
                 duration: 1.4,
                 ease: 'back.out(1.7)'
             })
-            .to(textRef.current, {
-                opacity: 1,
-                y: 0,
-                filter: 'blur(0px)',
-                letterSpacing: '0.3em',
-                duration: 1.2,
-                ease: 'power3.out'
-            }, '-=0.6')
-            .to(subtitleRef.current, {
-                opacity: 1,
-                y: 0,
-                duration: 0.8,
-                ease: 'power2.out'
-            }, '-=0.8')
-            .to(progressRef.current, {
-                width: '100%',
-                duration: 1.5,
-                ease: 'power1.inOut'
-            }, '-=1.0')
-            // Delay for premium look
-            .to(logoRef.current, {
-                scale: 1.05,
-                filter: 'drop-shadow(0 0 35px rgba(139, 92, 246, 0.8))',
-                duration: 0.8,
-                ease: 'power1.out'
-            })
-            // High-fidelity fade out sequence
-            .to(containerRef.current, {
-                opacity: 0,
-                duration: 0.8,
-                ease: 'power3.inOut'
-            }, '+=0.2');
+                .to(textRef.current, {
+                    opacity: 1,
+                    y: 0,
+                    filter: 'blur(0px)',
+                    letterSpacing: '0.3em',
+                    duration: 1.2,
+                    ease: 'power3.out'
+                }, '-=0.6')
+                .to(subtitleRef.current, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.8,
+                    ease: 'power2.out'
+                }, '-=0.8')
+                .to(progressRef.current, {
+                    width: '100%',
+                    duration: 1.5,
+                    ease: 'power1.inOut'
+                }, '-=1.0')
+                // Delay for premium look
+                .to(logoRef.current, {
+                    scale: 1.05,
+                    filter: 'drop-shadow(0 0 35px rgba(139, 92, 246, 0.8))',
+                    duration: 0.8,
+                    ease: 'power1.out'
+                })
+                // High-fidelity fade out sequence
+                .to(containerRef.current, {
+                    opacity: 0,
+                    duration: 0.8,
+                    ease: 'power3.inOut'
+                }, '+=0.2');
         });
 
         return () => ctx.revert();
@@ -98,8 +98,8 @@ export const LogoReveal: React.FC<{ onComplete: () => void }> = ({ onComplete })
     if (!isVisible) return null;
 
     return (
-        <div 
-            ref={containerRef} 
+        <div
+            ref={containerRef}
             className="reveal-container fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black overflow-hidden"
             style={{
                 background: 'radial-gradient(circle, #0c0818 0%, #020205 100%)'
@@ -113,16 +113,16 @@ export const LogoReveal: React.FC<{ onComplete: () => void }> = ({ onComplete })
 
             <div className="flex flex-col items-center gap-6 z-10">
                 {/* Logo Image */}
-                <img 
+                <img
                     ref={logoRef}
-                    src={logoDark} 
-                    alt="CodeArena Logo" 
+                    src={logoDark}
+                    alt="CodeArena Logo"
                     className="w-32 h-32 object-contain"
                 />
 
                 {/* Brand Name */}
-                <h1 
-                    ref={textRef} 
+                <h1
+                    ref={textRef}
                     className="reveal-text text-4xl md:text-5xl font-black uppercase text-white tracking-widest text-center"
                     style={{ fontFamily: "'Orbitron', sans-serif" }}
                 >
@@ -130,14 +130,12 @@ export const LogoReveal: React.FC<{ onComplete: () => void }> = ({ onComplete })
                 </h1>
 
                 {/* Subtitle / Status */}
-                <div 
+                <div
                     ref={subtitleRef}
                     className="flex flex-col items-center gap-2"
                 >
-                    <span className="text-xs font-mono text-accent-secondary/80 tracking-[0.25em] uppercase">
-                        Establishing Security Uplink...
-                    </span>
-                    
+
+
                     {/* Futuristic progress bar */}
                     <div className="w-64 h-[2px] bg-white/10 rounded-full overflow-hidden mt-1">
                         <div ref={progressRef} className="h-full bg-gradient-to-r from-accent-primary to-accent-secondary" />

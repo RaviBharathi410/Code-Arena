@@ -9,17 +9,16 @@
     --accent-bright: #9f7bff;
     --accent-glow: rgba(159, 123, 255, 0.16);
     --text-muted: #71717a;
-    --border-dim: rgba(255, 255, 255, 0.05);
-    --font-heading: 'Inter', sans-serif;
-    --font-body: 'Inter', sans-serif;
-    --font-mono: 'Share Tech Mono', monospace;
+    --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
     position: relative;
     width: 100%;
     height: 100%;
     background: transparent;
     color: white;
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -225,10 +224,12 @@
 }
 
 .control-label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-weight: 700;
-    letter-spacing: 0.15em;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    color: #d4d4d8;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
 
 /* Custom Controls */
@@ -244,8 +245,9 @@
     background: transparent;
     border: none;
     padding: 0.75rem;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
     color: var(--text-muted);
     cursor: pointer;
     border-radius: 6px;
@@ -350,8 +352,8 @@ input:checked + .slider:before {
     border: 1px solid var(--border-dim);
     color: white;
     padding: 0.75rem 1rem;
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
     border-radius: 8px;
     outline: none;
 }
@@ -367,9 +369,9 @@ input:checked + .slider:before {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-dim);
     color: white;
-    padding: 1rem 1.5rem;
-    font-family: var(--font-mono);
-    font-size: 0.9rem;
+    padding: 0.875rem 1.25rem;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
     border-radius: 12px;
     outline: none;
     transition: all 0.3s;
@@ -386,9 +388,9 @@ input:checked + .slider:before {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-dim);
     color: white;
-    padding: 1rem 1.5rem;
-    font-family: var(--font-mono);
-    font-size: 0.9rem;
+    padding: 1rem 1.25rem;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
     border-radius: 12px;
     outline: none;
     resize: none;
@@ -466,4 +468,33 @@ input:checked + .slider:before {
     height: 2px;
     background: linear-gradient(90deg, transparent, var(--accent-purple), transparent);
     margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+    .settings-layout {
+        flex-direction: column;
+    }
+    .settings-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-dim);
+        padding: 1rem 0;
+    }
+    .sidebar-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 0 1rem;
+        gap: 0.5rem;
+    }
+    .nav-item {
+        white-space: nowrap;
+        padding: 0.75rem 1rem;
+    }
+    .settings-content {
+        padding: 1.5rem 1rem;
+    }
+    .setting-group {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
 }

@@ -1,0 +1,18 @@
+{
+  "id": "c",
+  "name": "C (GCC)",
+  "sourceFile": "main.c",
+  "compile": [
+    "/usr/bin/gcc",
+    "main.c",
+    "-O2",
+    "-std=c11",
+    "-o",
+    "main"
+  ],
+  "run": [
+    "./main"
+  ],
+  "compileTimeoutMs": 10000,
+  "runTimeoutMs": 2000
+}

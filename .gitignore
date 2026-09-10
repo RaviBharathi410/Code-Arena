@@ -10,7 +10,23 @@ build/
 
 # Environment
 .env
+.env.*
 .env.local
+!.env.example
+
+# Scratch and test drivers
+scratch/
+apps/server/test-driver.ts
+apps/server/src/socket/fix.js
+
+# Python cache & test output
+__pycache__/
+*.pyc
+.pytest_cache/
+imported_problems_preview.json
+importer_test_preview.json
+importer_test_qc.json
+low_confidence_qc.json
 
 # Logs
 *.log

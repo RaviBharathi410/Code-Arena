@@ -167,86 +167,159 @@ export const TournamentHub: React.FC<{ isLight: boolean; isStandalone?: boolean 
 
             {/* Tournaments Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredTournaments.map((t) => (
-                    <div
-                        key={t.id}
-                        className={`tournament-card group p-8 rounded-[2.5rem] border transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${isLight ? 'bg-white border-black/5 hover:border-black/10 hover:shadow-2xl' : 'bg-white/5 border-white/8 hover:border-white/20 hover:bg-white/[0.07]'
+                {filteredTournaments.map((t) => {
+                    const fillPercent = Math.min(100, Math.round((t.players / (t.maxPlayers || 1)) * 100));
+                    const isFull = t.players >= t.maxPlayers;
+                    return (
+                        <div
+                            key={t.id}
+                            className={`tournament-card group p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                                isLight 
+                                    ? 'bg-white border-purple-100 hover:border-purple-300 hover:shadow-xl' 
+                                    : 'bg-[#0d0d16]/90 border-purple-500/20 hover:border-purple-400/50 hover:shadow-[0_0_30px_rgba(124,58,237,0.2)]'
                             }`}
-                    >
-                    <div className="relative z-10">
-                        <div className="flex flex-wrap items-center gap-3 mb-6">
-                            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border border-current text-[10px] font-black uppercase tracking-widest ${t.tier === 'Diamond' ? 'text-blue-400' :
-                                t.tier === 'Platinum' ? 'text-accent-secondary' :
-                                    t.tier === 'Gold' ? 'text-yellow-500' : 'text-gray-400'
-                                }`}>
-                                <Trophy size={10} /> {t.tier} Tier
-                            </div>
-                            {t.status === 'live' && (
-                                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse border border-red-500/20">
-                                    <Activity size={10} /> Live Now
-                                </div>
-                            )}
-                        </div>
-
-                            <h3 className={`text-3xl font-black mb-3 uppercase tracking-tighter leading-none group-hover:scale-[1.02] transition-transform origin-left text-left ${isLight ? 'text-black' : 'text-white'}`}>
-                                {t.name}
-                            </h3>
-                            <div className="flex items-center gap-3 mb-8">
-                                <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${isLight ? 'bg-black/5 text-gray-500' : 'bg-white/5 text-gray-400'}`}>{t.format}</span>
-                                <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{t.requirements}</span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-8">
-                                <div className={`p-5 rounded-3xl border ${isLight ? 'bg-white border-black/5' : 'bg-black/20 border-white/5'}`}>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2 flex items-center gap-1.5"><Users size={12} /> Players</p>
-                                    <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'}`}>{t.players} / <span className="opacity-40">{t.maxPlayers}</span></p>
-                                </div>
-                                <div className={`p-5 rounded-3xl border ${isLight ? 'bg-white border-black/5' : 'bg-black/20 border-white/5'}`}>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2 flex items-center gap-1.5"><Zap size={12} /> Prize Pool</p>
-                                    <p className="text-2xl font-black text-accent-secondary">{t.prizePool}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="relative z-10 flex items-center justify-between gap-4 mt-auto">
-                            <div className="flex items-center gap-3">
-                                <Clock size={16} className="text-gray-500" />
-                                <div className="text-left">
-                                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Start Time</p>
-                                    <p className={`text-sm font-bold ${t.status === 'live' ? 'text-green-500' : ''}`}>{t.startTime}</p>
-                                </div>
-                            </div>
-
-                            {t.status === 'upcoming' ? (
-                                <button className={`px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${isLight ? 'bg-black text-white hover:scale-105 shadow-xl' : 'bg-white text-black hover:scale-105 shadow-lg'
-                                    }`}>
-                                    Register
-                                </button>
-                            ) : t.status === 'live' ? (
-                                <div className="flex gap-2">
-                                    <button className="px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest bg-accent-secondary text-white hover:scale-105 shadow-lg shadow-accent-secondary/20">
-                                        Watch
-                                    </button>
-                                    <button className={`px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest border transition-all ${isLight ? 'border-black/10 hover:bg-black/5' : 'border-white/10 hover:bg-white/5'
+                        >
+                            <div className="relative z-10">
+                                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] font-bold uppercase tracking-wider ${
+                                            t.tier === 'Diamond' ? 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10 shadow-[0_0_10px_rgba(6,182,212,0.2)]' :
+                                            t.tier === 'Platinum' ? 'text-purple-300 border-purple-500/40 bg-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.2)]' :
+                                            t.tier === 'Gold' ? 'text-amber-300 border-amber-500/40 bg-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 
+                                            'text-gray-300 border-gray-500/40 bg-gray-500/10'
                                         }`}>
-                                        Bracket
-                                    </button>
-                                </div>
-                            ) : (
-                                <button className={`px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest border transition-all ${isLight ? 'border-black/10 hover:bg-black/5 text-gray-400' : 'border-white/10 hover:bg-white/5 text-gray-500'
-                                    }`}>
-                                    View Results
-                                </button>
-                            )}
-                        </div>
+                                            <Trophy size={11} /> {t.tier} Tier
+                                        </div>
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                            isLight ? 'bg-black/5 text-gray-600' : 'bg-white/5 text-gray-400 border border-white/10'
+                                        }`}>
+                                            {t.format}
+                                        </span>
+                                    </div>
 
-                        {/* Background Decorative Element */}
-                        <div className={`absolute -bottom-10 -right-10 w-48 h-48 rounded-full blur-[80px] opacity-10 transition-opacity group-hover:opacity-20 ${t.tier === 'Diamond' ? 'bg-blue-400' :
-                            t.tier === 'Platinum' ? 'bg-accent-secondary' :
-                                t.tier === 'Gold' ? 'bg-yellow-500' : 'bg-gray-400'
+                                    {t.status === 'live' ? (
+                                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 text-rose-400 text-[10px] font-bold uppercase tracking-wider border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.3)]">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_6px_#f43f5e]"></span>
+                                            </span>
+                                            LIVE NOW
+                                        </div>
+                                    ) : (
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                            {t.requirements}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <h3 className={`text-2xl md:text-3xl font-black mb-2 uppercase tracking-tight leading-tight group-hover:text-purple-300 transition-colors text-left ${
+                                    isLight ? 'text-black' : 'text-white'
+                                }`}>
+                                    {t.name}
+                                </h3>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
+                                    {/* Player Fill Progress Bar */}
+                                    <div className={`p-4 rounded-2xl border text-left ${
+                                        isLight ? 'bg-purple-50/50 border-purple-100' : 'bg-black/40 border-purple-500/20'
+                                    }`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-[9px] uppercase tracking-wider opacity-60 flex items-center gap-1.5 font-bold">
+                                                <Users size={11} className="text-purple-400" /> Roster Fill
+                                            </span>
+                                            <span className="text-xs font-bold">
+                                                {t.players} / <span className="opacity-50">{t.maxPlayers}</span>
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                            <div 
+                                                className={`h-full rounded-full transition-all duration-700 ${
+                                                    isFull 
+                                                        ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]' 
+                                                        : 'bg-gradient-to-r from-purple-500 to-violet-400 shadow-[0_0_8px_#a855f7]'
+                                                }`}
+                                                style={{ width: `${fillPercent}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-[8px] font-medium opacity-40 uppercase tracking-wider mt-2">
+                                            {isFull ? 'Grid capacity reached' : `${t.maxPlayers - t.players} slots remaining`}
+                                        </p>
+                                    </div>
+
+                                    {/* Prize Pool Card */}
+                                    <div className={`p-4 rounded-2xl border text-left flex flex-col justify-between ${
+                                        isLight ? 'bg-purple-50/50 border-purple-100' : 'bg-black/40 border-purple-500/20'
+                                    }`}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[9px] uppercase tracking-wider opacity-60 flex items-center gap-1.5 font-bold">
+                                                <Zap size={11} className="text-amber-400" /> Bounty Pool
+                                            </span>
+                                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300">
+                                                ESCROWED
+                                            </span>
+                                        </div>
+                                        <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-200">
+                                            {t.prizePool}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="relative z-10 flex items-center justify-between gap-4 mt-auto pt-4 border-t border-white/5">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                                        <Clock size={14} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[9px] uppercase tracking-wider opacity-50 font-bold">Commences</p>
+                                        <p className={`text-xs font-bold ${t.status === 'live' ? 'text-rose-400 animate-pulse' : 'text-gray-200'}`}>
+                                            {t.startTime}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {t.status === 'upcoming' ? (
+                                    <button 
+                                        disabled={isFull}
+                                        className={`px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                                            isFull 
+                                                ? 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'
+                                                : isLight 
+                                                    ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md' 
+                                                    : 'bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white shadow-[0_0_20px_rgba(124,58,237,0.35)] hover:scale-105'
+                                        }`}
+                                    >
+                                        {isFull ? 'Roster Full' : 'Register'}
+                                    </button>
+                                ) : t.status === 'live' ? (
+                                    <div className="flex gap-2">
+                                        <button className="px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:scale-105 transition-all">
+                                            Spectate
+                                        </button>
+                                        <button className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
+                                            isLight ? 'border-purple-200 hover:bg-purple-50' : 'border-white/10 hover:bg-white/5 text-gray-300'
+                                        }`}>
+                                            Bracket
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button className={`px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
+                                        isLight ? 'border-gray-200 text-gray-500 hover:bg-gray-100' : 'border-white/10 text-gray-400 hover:bg-white/5'
+                                    }`}>
+                                        Ledger Results
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Background Decorative Glow */}
+                            <div className={`absolute -bottom-10 -right-10 w-48 h-48 rounded-full blur-[80px] opacity-10 transition-opacity group-hover:opacity-25 pointer-events-none ${
+                                t.tier === 'Diamond' ? 'bg-cyan-400' :
+                                t.tier === 'Platinum' ? 'bg-purple-500' :
+                                t.tier === 'Gold' ? 'bg-amber-400' : 'bg-gray-400'
                             }`} />
-                    </div>
-                ))}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Quick Stats Banner */}

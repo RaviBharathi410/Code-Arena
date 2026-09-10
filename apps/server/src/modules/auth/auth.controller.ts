@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { authService } from './auth.service';
-import { registerSchema, loginSchema } from './auth.schema';
+import { registerSchema, loginSchema, googleAuthSchema } from './auth.schema';
 import { logger } from '../../lib/logger';
 
 export class AuthController {
@@ -27,8 +27,18 @@ export class AuthController {
             if (err.message === 'User already exists') {
                 return res.status(409).json({ message: 'User already exists' });
             }
-            logger.error({ err }, 'Registration Error');
-            res.status(500).json({ message: 'Error registering user' });
+            console.error("\n========== REGISTER ERROR ==========");
+console.error(err);
+if (err instanceof Error) {
+    console.error(err.stack);
+}
+console.error("====================================\n");
+
+logger.error({ err }, "Registration Error");
+
+return res.status(500).json({
+    message: err instanceof Error ? err.message : "Error registering user",
+});
         }
     }
 
@@ -60,6 +70,49 @@ export class AuthController {
             }
             logger.error({ err }, 'Login Error');
             res.status(500).json({ message: 'Error logging in' });
+        }
+    }
+
+    async googleAuth(req: Request, res: Response) {
+        try {
+            const validated = googleAuthSchema.parse(req.body);
+            const { accessToken, refreshToken, user } = await authService.googleLogin(validated.credential);
+
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            });
+
+            res.json({ accessToken, user });
+        } catch (err: any) {
+            if (err.name === 'ZodError') {
+                return res.status(400).json({
+                    message: 'Validation failed',
+                    errors: err.flatten().fieldErrors
+                });
+            }
+            logger.error({ err: err.message }, 'Google Auth Error');
+            res.status(401).json({ message: err.message || 'Google authentication failed' });
+        }
+    }
+
+    async demoLogin(req: Request, res: Response) {
+        try {
+            const { accessToken, refreshToken, user } = await authService.createDemoUser();
+
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+
+            res.status(201).json({ accessToken, user });
+        } catch (err: any) {
+            logger.error({ err: err.message }, 'Demo Login Error');
+            res.status(500).json({ message: 'Error establishing demo session' });
         }
     }
 

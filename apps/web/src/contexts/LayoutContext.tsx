@@ -43,6 +43,13 @@ export const LayoutProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const useLayout = () => {
     const context = useContext(LayoutContext);
-    if (!context) throw new Error("useLayout must be used within LayoutProvider");
+    if (!context) {
+        return {
+            isMenuOpen: false,
+            setIsMenuOpen: () => {},
+            isLight: false,
+            setTheme: () => {}
+        };
+    }
     return context;
 };

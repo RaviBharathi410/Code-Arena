@@ -1,0 +1,8 @@
+time:0.042
+time-wall:0.043
+max-rss:4048
+csw-voluntary:6
+csw-forced:2
+exitcode:42
+status:RE
+message:Exited with error status 42

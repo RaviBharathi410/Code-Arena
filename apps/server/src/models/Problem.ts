@@ -10,6 +10,15 @@ export interface IProblem extends Document {
     examples: any[];
     testCases: any[];
     boilerplate: any;
+    problemType: 'function' | 'stdin-stdout';
+    functionName?: string;
+    returnType?: string;
+    parameters?: any[];
+    driverTemplates?: any;
+    source?: string;
+    sourceUrl?: string;
+    cfRating?: number;
+    extractionConfidence?: 'high' | 'low';
     optimalTimeComplexity?: string;
     optimalSpaceComplexity?: string;
     tags: string[];
@@ -27,6 +36,15 @@ const problemSchema = new Schema<IProblem>({
     examples: { type: Array, default: [] } as any,
     testCases: { type: Array, default: [] } as any,
     boilerplate: { type: Schema.Types.Mixed, required: true },
+    problemType: { type: String, enum: ['function', 'stdin-stdout'], default: 'function' },
+    functionName: { type: String },
+    returnType: { type: String },
+    parameters: { type: Array },
+    driverTemplates: { type: Schema.Types.Mixed },
+    source: { type: String },
+    sourceUrl: { type: String },
+    cfRating: { type: Number },
+    extractionConfidence: { type: String, enum: ['high', 'low'], default: 'high' },
     optimalTimeComplexity: { type: String },
     optimalSpaceComplexity: { type: String },
     tags: { type: [String], default: [] },

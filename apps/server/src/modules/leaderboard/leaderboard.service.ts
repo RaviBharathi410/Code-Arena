@@ -12,6 +12,9 @@ const LEADERBOARD_CACHE_KEY = 'leaderboard:global';
  * Cold path: PostgreSQL with window functions as fallback / source of truth.
  */
 export class LeaderboardService {
+    async getLeaderboard(limit: number = 50, offset: number = 0) {
+        return this.getRankings(limit, offset);
+    }
     async getRankings(limit: number = 50, offset: number = 0) {
         // Try Redis leaderboard first (sub-ms, no DB load)
         try {
@@ -24,32 +27,46 @@ export class LeaderboardService {
             logger.warn({ err }, '[LEADERBOARD] Redis read failed, falling back to PostgreSQL');
         }
 
-        // Note: uses rankRating (renamed from elo in Phase 1 schema migration)
-        const users = await User.find()
-            .select('username rankRating wins losses avatarUrl')
+        // Exclude unranked / placement accounts from the global competitive leaderboard
+        const filter = {
+            $or: [
+                { placementMatchesRemaining: { $lte: 0 } },
+                { placementMatchesRemaining: { $exists: false }, totalBattles: { $gte: 5 } },
+            ],
+            tier: { $ne: 'PLACEMENT' }
+        };
+
+        const users = await User.find(filter)
+            .select('username rankRating wins losses tier avatarUrl')
             .sort({ rankRating: -1 })
             .limit(limit)
             .skip(offset)
             .lean();
 
-        // Calculate rank in JS since Mongoose doesn't have an exact window function
+        // Calculate rank in JS
         let rankCounter = offset + 1;
-        const data = users.map(u => ({
-            id: u._id,
-            username: u.username,
-            rankRating: u.rankRating,
-            wins: u.wins,
-            losses: u.losses,
-            avatarUrl: (u as any).avatarUrl,
-            rank: rankCounter++
-        }));
+        const data = users.map(u => {
+            const total = (u.wins || 0) + (u.losses || 0);
+            const winRate = total > 0 ? Math.round(((u.wins || 0) / total) * 100) : 0;
+            return {
+                id: u._id,
+                username: u.username,
+                rankRating: u.rankRating,
+                tier: u.tier || 'SILVER',
+                wins: u.wins || 0,
+                losses: u.losses || 0,
+                winRate,
+                avatarUrl: (u as any).avatarUrl,
+                rank: rankCounter++
+            };
+        });
 
         // Backfill the Redis leaderboard from DB results
         try {
             for (const entry of data) {
-                await redisLeaderboard.updateRating(entry.id, entry.rankRating);
+                await redisLeaderboard.updateRating(entry.id.toString(), entry.rankRating);
             }
-            logger.debug({ count: data.length }, '[LEADERBOARD] Redis backfilled from PostgreSQL');
+            logger.debug({ count: data.length }, '[LEADERBOARD] Redis backfilled');
         } catch (err) {
             logger.warn({ err }, '[LEADERBOARD] Redis backfill failed');
         }
@@ -58,33 +75,61 @@ export class LeaderboardService {
     }
 
     async getPersonalRank(userId: string) {
+        const user = await User.findById(userId).lean();
+        if (!user) throw new Error('User not found');
+
+        const placementsRemaining = user.placementMatchesRemaining ?? (user.totalBattles < 5 ? 5 - user.totalBattles : 0);
+        const isPlacement = placementsRemaining > 0 || user.tier === 'PLACEMENT';
+
+        if (isPlacement) {
+            return {
+                id: user._id,
+                username: user.username,
+                rankRating: user.rankRating,
+                tier: 'PLACEMENT',
+                wins: user.wins || 0,
+                losses: user.losses || 0,
+                rank: null,
+                isPlacement: true,
+                placementsRemaining,
+            };
+        }
+
         // Try Redis first for instant rank lookup
         try {
             const rank = await redisLeaderboard.getRank(userId);
-            const elo = await redisLeaderboard.getPlayerElo(userId);
-            if (rank !== null && elo !== null) {
-                const user = await User.findById(userId).select('username rankRating wins losses').lean();
-                if (user) {
-                    return { id: user._id, username: user.username, rankRating: user.rankRating, wins: user.wins, losses: user.losses, rank };
-                }
+            if (rank !== null) {
+                return {
+                    id: user._id,
+                    username: user.username,
+                    rankRating: user.rankRating,
+                    tier: user.tier,
+                    wins: user.wins,
+                    losses: user.losses,
+                    rank,
+                    isPlacement: false,
+                };
             }
         } catch (err) {
             logger.warn({ err }, '[LEADERBOARD] Redis rank lookup failed, falling back to MongoDB');
         }
 
-        // Fallback: count users with a higher rankRating
-        const user = await User.findById(userId).lean();
-        if (!user) throw new Error('User not found');
+        // Fallback: count ranked users with a higher rankRating
+        const higherRankCount = await User.countDocuments({
+            placementMatchesRemaining: { $lte: 0 },
+            tier: { $ne: 'PLACEMENT' },
+            rankRating: { $gt: user.rankRating }
+        });
 
-        const higherRankCount = await User.countDocuments({ rankRating: { $gt: user.rankRating } });
-        
         return {
             id: user._id,
             username: user.username,
             rankRating: user.rankRating,
+            tier: user.tier,
             wins: user.wins,
             losses: user.losses,
-            rank: higherRankCount + 1
+            rank: higherRankCount + 1,
+            isPlacement: false,
         };
     }
 

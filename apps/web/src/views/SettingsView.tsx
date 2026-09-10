@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import './SettingsView.css';
 import { 
-    Monitor, Volume2, Code, ShieldCheck, 
-    Bell, Zap, Layout, Lock, User, 
+    Monitor, Code, 
+    Bell, Zap, Terminal, User, 
     Save, CheckCircle2, ChevronRight,
-    Search, Cpu, Play, Moon, Sun, 
-    Settings, Eye, Activity, Globe,
-    MousePointer2, Terminal
+    Moon, Sun, Settings, Sparkles, Check
 } from 'lucide-react';
 import { useLayout } from '../contexts/LayoutContext';
 import { useAuthStore } from '../store/useAuthStore';
@@ -20,15 +18,12 @@ interface SettingsSection {
 }
 
 const SECTIONS: SettingsSection[] = [
-    { id: 'visual', title: 'Visual Interface', icon: Monitor, description: 'Neural display calibration & UI protocol' },
-    { id: 'audio', title: 'Neural Audio', icon: Volume2, description: 'Sonic immersion & tactical feedback' },
-    { id: 'editor', title: 'Code Editor', icon: Code, description: 'IDE synchronization & syntax uplink' },
-    { id: 'arena', title: 'Arena Protocol', icon: Zap, description: 'Combat parameters & match logic' },
-    { id: 'notifications', title: 'Notifications', icon: Bell, description: 'Intelligence feed & priority alerts' },
-    { id: 'performance', title: 'Performance', icon: Activity, description: 'Hardware allocation & render speed' },
-    { id: 'keybindings', title: 'Keybindings', icon: Terminal, description: 'Manual override & tactical macros' },
-    { id: 'privacy', title: 'Privacy & Security', icon: Lock, description: 'Data encryption & visibility filters' },
-    { id: 'account', title: 'Account Dossier', icon: User, description: 'Operator profile & linked systems' },
+    { id: 'visual', title: 'Visual Interface', icon: Monitor, description: 'Display calibration, theme mode & UI protocol' },
+    { id: 'editor', title: 'Code Editor', icon: Code, description: 'IDE synchronization, font metrics & syntax uplink' },
+    { id: 'arena', title: 'Arena Protocol', icon: Zap, description: 'Combat parameters & match preferences' },
+    { id: 'notifications', title: 'Notifications & Audio', icon: Bell, description: 'Tactical feed alerts & acoustic feedback' },
+    { id: 'keybindings', title: 'Keybindings', icon: Terminal, description: 'Hotkeys, shortcuts & rapid inputs' },
+    { id: 'account', title: 'Account Dossier', icon: User, description: 'Operator profile & linked identity' },
 ];
 
 const getStored = (key: string, defaults: any) => {
@@ -48,15 +43,30 @@ export const SettingsView: React.FC = () => {
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
 
-    // States for each section
-    const [visual, setVisual] = useState(() => getStored('arena_settings_visual', { scanlines: true, particles: true, compactHud: false }));
-    const [audio, setAudio] = useState(() => getStored('arena_settings_audio', { masterVolume: 80, sfxVolume: 70, ambientHum: 30, profile: 'cyberpunk' }));
-    const [editor, setEditor] = useState(() => getStored('arena_settings_editor', { typeface: 'jetbrains', fontSize: 14, keymap: 'vscode', tabSize: 4, lineNumbers: true }));
-    const [arena, setArena] = useState(() => getStored('arena_settings_arena', { autoAccept: false, countdown: 5, showOpponentElo: true, liveSpec: true, autoSubmit: true }));
-    const [notifications, setNotifications] = useState(() => getStored('arena_settings_notifications', { emailAlerts: true, soundAlerts: true, desktopPush: false, systemNews: true }));
-    const [performance, setPerformance] = useState(() => getStored('arena_settings_performance', { hardwareAcceleration: true, frameLimit: 60, renderQuality: 'high' }));
-    const [keybindings, setKeybindings] = useState(() => getStored('arena_settings_keybindings', { submitHotkey: 'Ctrl+Enter', runHotkey: 'Ctrl+R', clearHotkey: 'Ctrl+L', voiceHotkey: 'Ctrl+Shift+V' }));
-    const [privacy, setPrivacy] = useState(() => getStored('arena_settings_privacy', { publicProfile: true, showMatchHistory: true, encryptData: false, incognitoMode: false }));
+    // States for supported sections
+    const [visual, setVisual] = useState(() => getStored('arena_settings_visual', { compactHud: false }));
+    const [editor, setEditor] = useState(() => getStored('arena_settings_editor', { 
+        typeface: 'jetbrains', 
+        fontSize: 14, 
+        tabSize: 4, 
+        lineNumbers: true,
+        minimap: false 
+    }));
+    const [arena, setArena] = useState(() => getStored('arena_settings_arena', { 
+        autoAccept: false, 
+        showOpponentElo: true, 
+        autoCopyRoomCode: true,
+        autoSubmit: true 
+    }));
+    const [notifications, setNotifications] = useState(() => getStored('arena_settings_notifications', { 
+        inAppAlerts: true, 
+        soundAlerts: true 
+    }));
+    const [keybindings, setKeybindings] = useState(() => getStored('arena_settings_keybindings', { 
+        submitHotkey: 'Ctrl+Enter', 
+        runHotkey: 'Ctrl+R', 
+        voiceHotkey: 'Ctrl+Shift+V' 
+    }));
 
     // Account state
     const [username, setUsername] = useState('');
@@ -73,32 +83,34 @@ export const SettingsView: React.FC = () => {
 
     const handleSave = async () => {
         try {
-            // Write configs to localStorage
             localStorage.setItem('arena_settings_visual', JSON.stringify(visual));
-            localStorage.setItem('arena_settings_audio', JSON.stringify(audio));
             localStorage.setItem('arena_settings_editor', JSON.stringify(editor));
             localStorage.setItem('arena_settings_arena', JSON.stringify(arena));
             localStorage.setItem('arena_settings_notifications', JSON.stringify(notifications));
-            localStorage.setItem('arena_settings_performance', JSON.stringify(performance));
             localStorage.setItem('arena_settings_keybindings', JSON.stringify(keybindings));
-            localStorage.setItem('arena_settings_privacy', JSON.stringify(privacy));
 
-            // Sync user profile with api if user is logged in
+            // Notify open editors and views
+            window.dispatchEvent(new Event('arena-settings-updated'));
+
+            // Sync user profile if changed
             if (user?.id) {
                 const patchData: any = {};
-                if (username !== user.username) patchData.username = username;
-                if (email !== user.email) patchData.email = email;
+                if (username && username !== user.username) patchData.username = username;
                 if (avatarUrl !== user.avatarUrl) patchData.avatarUrl = avatarUrl;
 
                 if (Object.keys(patchData).length > 0) {
-                    const res = await api.patch(`/users/${user.id}`, patchData);
-                    updateStats(res.data);
+                    if (user.isDemo) {
+                        alert('Account modifications are restricted in Demo mode. Visual and editor settings have been saved locally.');
+                    } else {
+                        const res = await api.patch(`/users/${user.id}`, patchData);
+                        updateStats(res.data);
+                    }
                 }
             }
 
             setIsSaved(true);
             setHasUnsavedChanges(false);
-            setTimeout(() => setIsSaved(false), 2000);
+            setTimeout(() => setIsSaved(false), 2500);
         } catch (err: any) {
             console.error('Failed to save settings', err);
             alert(err?.response?.data?.message || err.message || 'Failed to save changes.');
@@ -112,21 +124,25 @@ export const SettingsView: React.FC = () => {
                     {/* Sidebar Navigation */}
                     <aside className="settings-sidebar">
                         <div className="sidebar-header">
-                            <span className="terminal-tag">VER 2.0 // CORE_CFG</span>
+                            <span className="terminal-tag">VER 2.0 // PROTOCOL_CFG</span>
                             <h2 className="sidebar-title">SYSTEM PREFS</h2>
                         </div>
                         <nav className="sidebar-nav">
-                            {SECTIONS.map((section) => (
-                                <button
-                                    key={section.id}
-                                    className={`nav-item ${activeSection === section.id ? 'active' : ''}`}
-                                    onClick={() => setActiveSection(section.id)}
-                                >
-                                    <section.icon size={18} />
-                                    <span className="nav-label">{section.title}</span>
-                                    {hasUnsavedChanges && <div className="unsaved-dot" />}
-                                </button>
-                            ))}
+                            {SECTIONS.map((section) => {
+                                const Icon = section.icon;
+                                const isActive = activeSection === section.id;
+                                return (
+                                    <button
+                                        key={section.id}
+                                        className={`nav-item ${isActive ? 'active' : ''}`}
+                                        onClick={() => setActiveSection(section.id)}
+                                    >
+                                        <Icon size={18} className="nav-icon" />
+                                        <span className="nav-label">{section.title}</span>
+                                        {isActive && <ChevronRight size={14} className="nav-arrow" />}
+                                    </button>
+                                );
+                            })}
                         </nav>
                     </aside>
 
@@ -143,40 +159,40 @@ export const SettingsView: React.FC = () => {
                         </header>
 
                         <div className="section-body">
+                            {/* Visual Interface */}
                             {activeSection === 'visual' && (
                                 <div className="settings-grid">
                                     <div className="setting-card">
-                                        <h3 className="card-title">HUD Elements</h3>
+                                        <h3 className="card-title">Theme Calibration</h3>
                                         <div className="control-row">
-                                            <span className="control-label">SCANLINES OVERLAY</span>
+                                            <div className="flex items-center gap-3">
+                                                {isLight ? <Sun size={18} className="text-amber-500" /> : <Moon size={18} className="text-purple-400" />}
+                                                <div>
+                                                    <span className="control-label block">LIGHT MODE THEME</span>
+                                                    <span className="text-[9px] text-gray-500">Switch between sleek dark matrix and high-contrast light mode</span>
+                                                </div>
+                                            </div>
                                             <label className="hud-switch">
                                                 <input 
                                                     type="checkbox" 
-                                                    checked={visual.scanlines} 
+                                                    checked={isLight} 
                                                     onChange={(e) => {
-                                                        setVisual({ ...visual, scanlines: e.target.checked });
+                                                        setTheme(e.target.checked ? 'light' : 'dark');
                                                         setHasUnsavedChanges(true);
                                                     }} 
                                                 />
                                                 <span className="slider" />
                                             </label>
                                         </div>
+                                    </div>
+
+                                    <div className="setting-card">
+                                        <h3 className="card-title">Display Protocol</h3>
                                         <div className="control-row">
-                                            <span className="control-label">PARTICLE EFFECTS</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={visual.particles} 
-                                                    onChange={(e) => {
-                                                        setVisual({ ...visual, particles: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">COMPACT HUD</span>
+                                            <div>
+                                                <span className="control-label block">COMPACT HUD MODE</span>
+                                                <span className="text-[9px] text-gray-500">Reduce spacing and HUD padding for maximum code real estate</span>
+                                            </div>
                                             <label className="hud-switch">
                                                 <input 
                                                     type="checkbox" 
@@ -193,78 +209,14 @@ export const SettingsView: React.FC = () => {
                                 </div>
                             )}
 
-                            {activeSection === 'audio' && (
-                                <div className="settings-grid">
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Volume Matrices</h3>
-                                        <div className="control-group">
-                                            <label className="control-label">MASTER OUTPUT ({audio.masterVolume}%)</label>
-                                            <input 
-                                                type="range" 
-                                                className="hud-range" 
-                                                min="0" 
-                                                max="100" 
-                                                value={audio.masterVolume}
-                                                onChange={(e) => {
-                                                    setAudio({ ...audio, masterVolume: Number(e.target.value) });
-                                                    setHasUnsavedChanges(true);
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="control-group">
-                                            <label className="control-label">SFX FEEDBACK ({audio.sfxVolume}%)</label>
-                                            <input 
-                                                type="range" 
-                                                className="hud-range" 
-                                                min="0" 
-                                                max="100" 
-                                                value={audio.sfxVolume}
-                                                onChange={(e) => {
-                                                    setAudio({ ...audio, sfxVolume: Number(e.target.value) });
-                                                    setHasUnsavedChanges(true);
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="control-group">
-                                            <label className="control-label">AMBIENT HUM ({audio.ambientHum}%)</label>
-                                            <input 
-                                                type="range" 
-                                                className="hud-range" 
-                                                min="0" 
-                                                max="100" 
-                                                value={audio.ambientHum}
-                                                onChange={(e) => {
-                                                    setAudio({ ...audio, ambientHum: Number(e.target.value) });
-                                                    setHasUnsavedChanges(true);
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Acoustic Profiles</h3>
-                                        <select 
-                                            className="hud-select" 
-                                            value={audio.profile}
-                                            onChange={(e) => {
-                                                setAudio({ ...audio, profile: e.target.value });
-                                                setHasUnsavedChanges(true);
-                                            }}
-                                        >
-                                            <option value="cyberpunk">CYBERPUNK // DEFAULT</option>
-                                            <option value="minimal">MINIMAL // ANALOG</option>
-                                            <option value="silent">SILENT // STEALTH</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            )}
-
+                            {/* Code Editor */}
                             {activeSection === 'editor' && (
                                 <div className="settings-grid">
                                     <div className="setting-card full-width">
-                                        <h3 className="card-title">IDE Parameters</h3>
-                                        <div className="control-row-grid">
+                                        <h3 className="card-title">Editor Typography & Metrics</h3>
+                                        <div className="control-row-grid grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="control-group">
-                                                <label className="control-label">TYPEFACE</label>
+                                                <label className="control-label">TYPEFACE FONT</label>
                                                 <select 
                                                     className="hud-select" 
                                                     value={editor.typeface}
@@ -273,9 +225,9 @@ export const SettingsView: React.FC = () => {
                                                         setHasUnsavedChanges(true);
                                                     }}
                                                 >
-                                                    <option value="inter">INTER</option>
-                                                    <option value="jetbrains">JETBRAINS MONO</option>
+                                                    <option value="jetbrains">JETBRAINS MONO (RECOMMENDED)</option>
                                                     <option value="fira">FIRA CODE</option>
+                                                    <option value="inter">INTER / SYSTEM</option>
                                                 </select>
                                             </div>
                                             <div className="control-group">
@@ -284,7 +236,7 @@ export const SettingsView: React.FC = () => {
                                                     type="range" 
                                                     className="hud-range" 
                                                     min="12" 
-                                                    max="24" 
+                                                    max="20" 
                                                     value={editor.fontSize}
                                                     onChange={(e) => {
                                                         setEditor({ ...editor, fontSize: Number(e.target.value) });
@@ -293,22 +245,7 @@ export const SettingsView: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="control-group">
-                                                <label className="control-label">KEYBINDING MAP</label>
-                                                <select 
-                                                    className="hud-select" 
-                                                    value={editor.keymap}
-                                                    onChange={(e) => {
-                                                        setEditor({ ...editor, keymap: e.target.value });
-                                                        setHasUnsavedChanges(true);
-                                                    }}
-                                                >
-                                                    <option value="vscode">VS CODE</option>
-                                                    <option value="vim">VIM</option>
-                                                    <option value="emacs">EMACS</option>
-                                                </select>
-                                            </div>
-                                            <div className="control-group">
-                                                <label className="control-label">TAB SIZE</label>
+                                                <label className="control-label">TAB INDENTATION</label>
                                                 <select 
                                                     className="hud-select" 
                                                     value={editor.tabSize}
@@ -321,8 +258,14 @@ export const SettingsView: React.FC = () => {
                                                     <option value="4">4 SPACES</option>
                                                 </select>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="setting-card">
+                                        <h3 className="card-title">Editor Features</h3>
+                                        <div className="space-y-4">
                                             <div className="control-row">
-                                                <span className="control-label">LINE NUMBERS</span>
+                                                <span className="control-label">DISPLAY LINE NUMBERS</span>
                                                 <label className="hud-switch">
                                                     <input 
                                                         type="checkbox" 
@@ -335,113 +278,135 @@ export const SettingsView: React.FC = () => {
                                                     <span className="slider" />
                                                 </label>
                                             </div>
+                                            <div className="control-row">
+                                                <span className="control-label">DISPLAY CODE MINIMAP</span>
+                                                <label className="hud-switch">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={editor.minimap} 
+                                                        onChange={(e) => {
+                                                            setEditor({ ...editor, minimap: e.target.checked });
+                                                            setHasUnsavedChanges(true);
+                                                        }} 
+                                                    />
+                                                    <span className="slider" />
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
+                            {/* Arena Protocol */}
                             {activeSection === 'arena' && (
                                 <div className="settings-grid">
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Combat Logic</h3>
-                                        <div className="control-row">
-                                            <span className="control-label">AUTO-ACCEPT MATCHMAKING</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={arena.autoAccept} 
-                                                    onChange={(e) => {
-                                                        setArena({ ...arena, autoAccept: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">SHOW OPPONENT ELO RATING</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={arena.showOpponentElo} 
-                                                    onChange={(e) => {
-                                                        setArena({ ...arena, showOpponentElo: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">ALLOW SPECTATORS</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={arena.liveSpec} 
-                                                    onChange={(e) => {
-                                                        setArena({ ...arena, liveSpec: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">AUTO-SUBMIT CODE ON TIMEOUT</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={arena.autoSubmit} 
-                                                    onChange={(e) => {
-                                                        setArena({ ...arena, autoSubmit: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Match parameters</h3>
-                                        <div className="control-group">
-                                            <label className="control-label">COUNTDOWN DURATION</label>
-                                            <select 
-                                                className="hud-select" 
-                                                value={arena.countdown}
-                                                onChange={(e) => {
-                                                    setArena({ ...arena, countdown: Number(e.target.value) });
-                                                    setHasUnsavedChanges(true);
-                                                }}
-                                            >
-                                                <option value="3">3 SECONDS</option>
-                                                <option value="5">5 SECONDS</option>
-                                                <option value="10">10 SECONDS</option>
-                                            </select>
+                                    <div className="setting-card full-width">
+                                        <h3 className="card-title">Combat Protocol</h3>
+                                        <div className="space-y-4">
+                                            <div className="control-row">
+                                                <div>
+                                                    <span className="control-label block">SHOW OPPONENT RATING</span>
+                                                    <span className="text-[9px] text-gray-500">Reveal rival Elo and Tier in match HUD</span>
+                                                </div>
+                                                <label className="hud-switch">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={arena.showOpponentElo} 
+                                                        onChange={(e) => {
+                                                            setArena({ ...arena, showOpponentElo: e.target.checked });
+                                                            setHasUnsavedChanges(true);
+                                                        }} 
+                                                    />
+                                                    <span className="slider" />
+                                                </label>
+                                            </div>
+                                            <div className="control-row">
+                                                <div>
+                                                    <span className="control-label block">AUTO-COPY ROOM TOKEN</span>
+                                                    <span className="text-[9px] text-gray-500">Automatically copy 6-digit access code upon room generation</span>
+                                                </div>
+                                                <label className="hud-switch">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={arena.autoCopyRoomCode} 
+                                                        onChange={(e) => {
+                                                            setArena({ ...arena, autoCopyRoomCode: e.target.checked });
+                                                            setHasUnsavedChanges(true);
+                                                        }} 
+                                                    />
+                                                    <span className="slider" />
+                                                </label>
+                                            </div>
+                                            <div className="control-row">
+                                                <div>
+                                                    <span className="control-label block">AUTO-SUBMIT ON EXPIRATION</span>
+                                                    <span className="text-[9px] text-gray-500">Automatically test and submit code buffer when clock reaches 0:00</span>
+                                                </div>
+                                                <label className="hud-switch">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={arena.autoSubmit} 
+                                                        onChange={(e) => {
+                                                            setArena({ ...arena, autoSubmit: e.target.checked });
+                                                            setHasUnsavedChanges(true);
+                                                        }} 
+                                                    />
+                                                    <span className="slider" />
+                                                </label>
+                                            </div>
+                                            <div className="control-row">
+                                                <div>
+                                                    <span className="control-label block">AUTO-ACCEPT MATCHMAKING</span>
+                                                    <span className="text-[9px] text-gray-500">Instantly lock in when a quick match opponent is found</span>
+                                                </div>
+                                                <label className="hud-switch">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={arena.autoAccept} 
+                                                        onChange={(e) => {
+                                                            setArena({ ...arena, autoAccept: e.target.checked });
+                                                            setHasUnsavedChanges(true);
+                                                        }} 
+                                                    />
+                                                    <span className="slider" />
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
+                            {/* Notifications & Audio */}
                             {activeSection === 'notifications' && (
                                 <div className="settings-grid">
                                     <div className="setting-card">
-                                        <h3 className="card-title">Priority Alert Feeds</h3>
+                                        <h3 className="card-title">Intelligence Alerts</h3>
                                         <div className="control-row">
-                                            <span className="control-label">EMAIL ALERTS</span>
+                                            <div>
+                                                <span className="control-label block">IN-APP TELEMETRY FEED</span>
+                                                <span className="text-[9px] text-gray-500">Live notifications for duel challenges, match results & ranks</span>
+                                            </div>
                                             <label className="hud-switch">
                                                 <input 
                                                     type="checkbox" 
-                                                    checked={notifications.emailAlerts} 
+                                                    checked={notifications.inAppAlerts} 
                                                     onChange={(e) => {
-                                                        setNotifications({ ...notifications, emailAlerts: e.target.checked });
+                                                        setNotifications({ ...notifications, inAppAlerts: e.target.checked });
                                                         setHasUnsavedChanges(true);
                                                     }} 
                                                 />
                                                 <span className="slider" />
                                             </label>
                                         </div>
+                                    </div>
+
+                                    <div className="setting-card">
+                                        <h3 className="card-title">Tactical Acoustics</h3>
                                         <div className="control-row">
-                                            <span className="control-label">TACTICAL AUDIO FEEDBACK</span>
+                                            <div>
+                                                <span className="control-label block">COMBAT SFX & BELL AUDIO</span>
+                                                <span className="text-[9px] text-gray-500">Play audio cues for test run pass/fail and countdown</span>
+                                            </div>
                                             <label className="hud-switch">
                                                 <input 
                                                     type="checkbox" 
@@ -454,95 +419,16 @@ export const SettingsView: React.FC = () => {
                                                 <span className="slider" />
                                             </label>
                                         </div>
-                                        <div className="control-row">
-                                            <span className="control-label">DESKTOP PUSH ALERTS</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={notifications.desktopPush} 
-                                                    onChange={(e) => {
-                                                        setNotifications({ ...notifications, desktopPush: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">SYSTEM UPLINK NEWS</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={notifications.systemNews} 
-                                                    onChange={(e) => {
-                                                        setNotifications({ ...notifications, systemNews: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
                                     </div>
                                 </div>
                             )}
 
-                            {activeSection === 'performance' && (
-                                <div className="settings-grid">
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Hardware Allocation</h3>
-                                        <div className="control-row">
-                                            <span className="control-label">HARDWARE ACCELERATION</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={performance.hardwareAcceleration} 
-                                                    onChange={(e) => {
-                                                        setPerformance({ ...performance, hardwareAcceleration: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-group mt-4">
-                                            <label className="control-label">FRAME RATE LIMIT ({performance.frameLimit} FPS)</label>
-                                            <input 
-                                                type="range" 
-                                                className="hud-range" 
-                                                min="30" 
-                                                max="144" 
-                                                step="30"
-                                                value={performance.frameLimit}
-                                                onChange={(e) => {
-                                                    setPerformance({ ...performance, frameLimit: Number(e.target.value) });
-                                                    setHasUnsavedChanges(true);
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Render Profiles</h3>
-                                        <select 
-                                            className="hud-select" 
-                                            value={performance.renderQuality}
-                                            onChange={(e) => {
-                                                setPerformance({ ...performance, renderQuality: e.target.value });
-                                                setHasUnsavedChanges(true);
-                                            }}
-                                        >
-                                            <option value="high">ULTRA HIGH RESOLUTION</option>
-                                            <option value="medium">STANDARD OPTIMIZED</option>
-                                            <option value="low">LOW POWER DRAFT</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            )}
-
+                            {/* Keybindings */}
                             {activeSection === 'keybindings' && (
                                 <div className="settings-grid">
                                     <div className="setting-card full-width">
-                                        <h3 className="card-title">Override & Macro Mappings</h3>
-                                        <div className="control-row-grid grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <h3 className="card-title">Tactical Shortcuts</h3>
+                                        <div className="control-row-grid grid grid-cols-1 md:grid-cols-3 gap-6">
                                             <div className="control-group">
                                                 <label className="control-label">SUBMIT CODE COMMAND</label>
                                                 <input 
@@ -568,19 +454,7 @@ export const SettingsView: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="control-group">
-                                                <label className="control-label">CLEAR CONSOLE TERMINAL</label>
-                                                <input 
-                                                    type="text" 
-                                                    className="hud-input" 
-                                                    value={keybindings.clearHotkey}
-                                                    onChange={(e) => {
-                                                        setKeybindings({ ...keybindings, clearHotkey: e.target.value });
-                                                        setHasUnsavedChanges(true);
-                                                    }}
-                                                />
-                                            </div>
-                                            <div className="control-group">
-                                                <label className="control-label">ACTIVATE VOICE INTEGRATION</label>
+                                                <label className="control-label">VOICE CODER TRIGGER</label>
                                                 <input 
                                                     type="text" 
                                                     className="hud-input" 
@@ -596,118 +470,98 @@ export const SettingsView: React.FC = () => {
                                 </div>
                             )}
 
-                            {activeSection === 'privacy' && (
-                                <div className="settings-grid">
-                                    <div className="setting-card">
-                                        <h3 className="card-title">Intelligence Protection</h3>
-                                        <div className="control-row">
-                                            <span className="control-label">PUBLIC PROFILE VISIBILITY</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={privacy.publicProfile} 
-                                                    onChange={(e) => {
-                                                        setPrivacy({ ...privacy, publicProfile: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">SHOW MATCH RECORD HISTORY</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={privacy.showMatchHistory} 
-                                                    onChange={(e) => {
-                                                        setPrivacy({ ...privacy, showMatchHistory: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">FORCE METRIC ENCRYPTION</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={privacy.encryptData} 
-                                                    onChange={(e) => {
-                                                        setPrivacy({ ...privacy, encryptData: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                        <div className="control-row">
-                                            <span className="control-label">INCOGNITO COMBAT MODE</span>
-                                            <label className="hud-switch">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={privacy.incognitoMode} 
-                                                    onChange={(e) => {
-                                                        setPrivacy({ ...privacy, incognitoMode: e.target.checked });
-                                                        setHasUnsavedChanges(true);
-                                                    }} 
-                                                />
-                                                <span className="slider" />
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
+                            {/* Account Dossier */}
                             {activeSection === 'account' && (
                                 <div className="settings-grid">
+                                    {user?.isDemo && (
+                                        <div className="setting-card full-width bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl flex items-center gap-3">
+                                            <Sparkles size={20} className="text-amber-400 shrink-0" />
+                                            <div>
+                                                <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">Demo Mode Session Active</p>
+                                                <p className="text-[11px] text-zinc-400 mt-0.5">
+                                                    You are exploring CodeArena in Demo mode. All combat, problems, code execution, and AI coach features are fully enabled. Account credential changes are restricted.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="setting-card full-width">
                                         <h3 className="card-title">Operator Dossier</h3>
-                                        <div className="space-y-8">
-                                            <div className="flex flex-col md:flex-row gap-8 items-center">
-                                                <div className="w-32 h-32 rounded-3xl bg-accent-secondary/10 border-2 border-accent-secondary/30 flex items-center justify-center text-accent-secondary text-4xl font-black">
-                                                    {username?.[0]?.toUpperCase() || 'O'}
-                                                </div>
-                                                <div className="flex-1 space-y-4 w-full">
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="control-group">
-                                                            <label className="control-label">OPERATOR ALIAS</label>
-                                                            <input 
-                                                                type="text" 
-                                                                className="hud-input" 
-                                                                value={username} 
-                                                                onChange={(e) => {
-                                                                    setUsername(e.target.value);
-                                                                    setHasUnsavedChanges(true);
-                                                                }}
+                                        <div className="control-row-grid grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="control-group">
+                                                <label className="control-label">OPERATOR CALLSIGN</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="hud-input" 
+                                                    value={username}
+                                                    onChange={(e) => {
+                                                        setUsername(e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="control-group">
+                                                <label className="control-label">AVATAR IMAGE</label>
+                                                {/* Hidden file input */}
+                                                <input
+                                                    id="avatar-file-input"
+                                                    type="file"
+                                                    accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                                                    style={{ display: 'none' }}
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        const reader = new FileReader();
+                                                        reader.onload = (ev) => {
+                                                            const result = ev.target?.result as string;
+                                                            setAvatarUrl(result);
+                                                            setHasUnsavedChanges(true);
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    }}
+                                                />
+                                                {/* Avatar Preview + Upload Button */}
+                                                <div className="flex items-center gap-4 mt-2">
+                                                    {/* Preview circle */}
+                                                    <div
+                                                        className="w-16 h-16 rounded-2xl border-2 border-dashed border-purple-500/40 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/80 transition-all group"
+                                                        onClick={() => document.getElementById('avatar-file-input')?.click()}
+                                                        title="Click to change avatar"
+                                                    >
+                                                        {avatarUrl ? (
+                                                            <img
+                                                                src={avatarUrl}
+                                                                alt="Avatar preview"
+                                                                className="w-full h-full object-cover"
+                                                                onError={() => setAvatarUrl('')}
                                                             />
-                                                        </div>
-                                                        <div className="control-group">
-                                                            <label className="control-label">UPLINK ADDRESS</label>
-                                                            <input 
-                                                                type="email" 
-                                                                className="hud-input" 
-                                                                value={email} 
-                                                                onChange={(e) => {
-                                                                    setEmail(e.target.value);
-                                                                    setHasUnsavedChanges(true);
-                                                                }}
-                                                            />
-                                                        </div>
+                                                        ) : (
+                                                            <span className="text-2xl font-black text-purple-400 uppercase group-hover:scale-110 transition-transform">
+                                                                {username?.[0] || '?'}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <div className="control-group">
-                                                        <label className="control-label">AVATAR URL</label>
-                                                        <input 
-                                                            type="text" 
-                                                            className="hud-input" 
-                                                            placeholder="https://example.com/avatar.png"
-                                                            value={avatarUrl}
-                                                            onChange={(e) => {
-                                                                    setAvatarUrl(e.target.value);
-                                                                    setHasUnsavedChanges(true);
-                                                                }}
-                                                        />
+                                                    {/* Upload controls */}
+                                                    <div className="flex flex-col gap-2 flex-1">
+                                                        <button
+                                                            type="button"
+                                                            className="hud-input text-left text-xs cursor-pointer hover:border-purple-500/60 transition-colors flex items-center gap-2"
+                                                            onClick={() => document.getElementById('avatar-file-input')?.click()}
+                                                        >
+                                                            <Sparkles size={12} className="text-purple-400 shrink-0" />
+                                                            <span className={avatarUrl ? 'text-green-400 font-medium' : 'opacity-50'}>
+                                                                {avatarUrl ? 'Image loaded — click to change' : 'Click to upload local image…'}
+                                                            </span>
+                                                        </button>
+                                                        {avatarUrl && (
+                                                            <button
+                                                                type="button"
+                                                                className="text-[10px] font-medium text-red-400 hover:text-red-300 text-left transition-colors"
+                                                                onClick={() => { setAvatarUrl(''); setHasUnsavedChanges(true); }}
+                                                            >
+                                                                ✕ Remove avatar
+                                                            </button>
+                                                        )}
+                                                        <span className="text-[9px] text-gray-500 font-medium">PNG, JPG, GIF, WEBP or SVG · max ~2 MB</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -717,25 +571,33 @@ export const SettingsView: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Footer Actions */}
-                        <footer className="settings-footer">
-                            <button 
-                                className={`save-btn ${isSaved ? 'saved' : ''}`}
-                                onClick={handleSave}
-                            >
+                        {/* Save Action Footer */}
+                        <div className="settings-footer">
+                            <div className="status-indicator">
                                 {isSaved ? (
-                                    <>
-                                        <CheckCircle2 size={16} />
-                                        <span>✓ CHANGES_SYNCED</span>
-                                    </>
+                                    <span className="status-text saved flex items-center gap-1.5 text-emerald-400">
+                                        <CheckCircle2 size={16} /> CONFIGURATION SYNCHRONIZED
+                                    </span>
+                                ) : hasUnsavedChanges ? (
+                                    <span className="status-text warning text-amber-400">
+                                        PENDING MODIFICATIONS // LOCAL BUFFER
+                                    </span>
                                 ) : (
-                                    <>
-                                        <Save size={16} />
-                                        <span>SAVE_CHANGES</span>
-                                    </>
+                                    <span className="status-text text-gray-500">
+                                        PARAMETERS SYNCHRONIZED
+                                    </span>
                                 )}
+                            </div>
+
+                            <button 
+                                className={`save-button flex items-center gap-2 ${hasUnsavedChanges ? 'primary' : 'disabled'}`}
+                                onClick={handleSave}
+                                disabled={!hasUnsavedChanges}
+                            >
+                                <Save size={16} />
+                                <span>APPLY MODIFICATIONS</span>
                             </button>
-                        </footer>
+                        </div>
                     </main>
                 </div>
             </div>

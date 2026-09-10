@@ -66,6 +66,15 @@ function MainLayoutInner({ children }: MainLayoutProps) {
     };
 
     const { isMenuOpen, setIsMenuOpen, isLight } = useLayout();
+    const isCombatMode = currentPage === PAGES.BATTLE || currentPage === PAGES.ARENA_MATCH || currentPage === PAGES.ARENA_SOLO || currentPage === PAGES.ARENA_PRACTICE;
+
+    useEffect(() => {
+        if (isCombatMode && isMenuOpen) {
+            setIsMenuOpen(false);
+        }
+    }, [isCombatMode, isMenuOpen, setIsMenuOpen]);
+
+    const showDrawer = !isCombatMode && isMenuOpen;
 
     return (
         <div className={`min-h-screen w-full relative transition-colors duration-500 ${isLight ? 'bg-gray-50' : 'bg-[#020202]'}`}>
@@ -100,23 +109,32 @@ function MainLayoutInner({ children }: MainLayoutProps) {
 
             {/* Global Side Menu Drawer */}
             <div className={`fixed top-0 left-0 h-screen w-[280px] z-[60] transition-all duration-500 ease-expo transform 
-                    ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
-                    ${isLight ? 'bg-white border-r border-black/10' : 'bg-[#020202]/95 backdrop-blur-2xl border-r border-white/10'}`}
+                    ${showDrawer ? 'translate-x-0' : '-translate-x-full'} 
+                    ${isLight ? 'bg-white border-r border-black/10' : 'bg-[#07070c]/95 backdrop-blur-2xl border-r border-purple-500/20 shadow-[10px_0_30px_rgba(0,0,0,0.8)]'}`}
             >
-                <div className="p-8 h-full flex flex-col">
-                    <div className="flex justify-between items-center mb-12">
+                <div className="p-6 h-full flex flex-col relative overflow-hidden">
+                    {/* Subtle top-right glow */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+
+                    <div className="flex justify-between items-center mb-8 px-2">
                         <Logo isLight={isLight} />
-                        <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-xl lg:hidden">
-                            <X size={20} />
+                        <button 
+                            onClick={() => setIsMenuOpen(false)} 
+                            className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl lg:hidden transition-colors"
+                        >
+                            <X size={18} />
                         </button>
                     </div>
 
-                    <nav className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-8">
+                    <nav className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-7">
                         {navSections.map((section) => (
-                            <div key={section.label} className="space-y-3">
-                                <p className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase px-5">
-                                    {section.label}
-                                </p>
+                            <div key={section.label} className="space-y-2">
+                                <div className="flex items-center gap-2 px-4 mb-2">
+                                    <span className="w-1 h-1 rounded-full bg-purple-500/60" />
+                                    <p className="text-[9px] font-bold tracking-wider text-purple-400/80 uppercase">
+                                        // {section.label}
+                                    </p>
+                                </div>
                                 <div className="space-y-1">
                                     {section.items.map((item) => {
                                         const Icon = item.icon;
@@ -128,14 +146,22 @@ function MainLayoutInner({ children }: MainLayoutProps) {
                                                     NAV_ACTIONS[item.id]?.();
                                                     setIsMenuOpen(false);
                                                 }}
-                                                className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all font-bold uppercase text-xs tracking-widest border
+                                                className={`w-full group relative flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all font-semibold uppercase text-xs tracking-wider border overflow-hidden
                                                         ${isActive
-                                                        ? (isLight ? 'bg-black text-white border-black shadow-lg shadow-black/10' : 'bg-white text-black border-white shadow-lg shadow-white/10')
-                                                        : (isLight ? 'text-gray-500 hover:bg-black/5 border-transparent' : 'text-gray-400 hover:bg-white/5 border-transparent')
+                                                        ? (isLight 
+                                                            ? 'bg-purple-50 text-purple-900 border-purple-200 shadow-sm font-bold' 
+                                                            : 'bg-white/[0.04] text-white border-white/10 font-bold')
+                                                        : (isLight 
+                                                            ? 'text-gray-600 hover:bg-purple-50 hover:text-purple-900 border-transparent' 
+                                                            : 'text-gray-400 hover:text-white hover:bg-white/[0.04] border-transparent hover:border-white/10')
                                                     }`}
                                             >
-                                                <Icon size={18} className={isActive ? (isLight ? 'text-white' : 'text-black') : 'opacity-60'} />
-                                                {item.label}
+                                                <Icon size={17} className={`transition-transform duration-200 group-hover:scale-110 ${
+                                                    isActive 
+                                                        ? (isLight ? 'text-purple-700' : 'text-purple-300') 
+                                                        : 'text-gray-500 group-hover:text-purple-300'
+                                                }`} />
+                                                <span className="flex-1 text-left">{item.label}</span>
                                             </button>
                                         );
                                     })}
@@ -144,20 +170,20 @@ function MainLayoutInner({ children }: MainLayoutProps) {
                         ))}
                     </nav>
 
-                    <div className="mt-auto pt-6 border-t border-white/10">
+                    <div className="mt-auto pt-4 border-t border-white/10">
                         <button
                             onClick={() => { logout(); goToLogin(); setIsMenuOpen(false); }}
-                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 font-bold uppercase text-xs tracking-widest hover:bg-red-500/10 transition-all"
+                            className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-red-400/90 hover:text-red-300 font-bold uppercase text-xs tracking-wider hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all group"
                         >
-                            <LogOut size={18} />
-                            Terminate Session
+                            <LogOut size={16} className="transition-transform duration-200 group-hover:-translate-x-0.5" />
+                            <span>Terminate Session</span>
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* Global Backdrop */}
-            {isMenuOpen && (
+            {showDrawer && (
                 <div
                     className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55]"
                     onClick={() => setIsMenuOpen(false)}
@@ -165,7 +191,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
             )}
 
             {/* Main Content Area */}
-            <main className={`h-full w-full transition-all duration-500 ${isMenuOpen ? 'md:pl-[280px]' : ''}`}>
+            <main className={`h-full w-full transition-all duration-500 ${showDrawer ? 'md:pl-[280px]' : ''}`}>
                 {children}
             </main>
 

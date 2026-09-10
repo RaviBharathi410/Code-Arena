@@ -10,13 +10,15 @@ interface LogoProps {
 }
 
 export const Logo: React.FC<LogoProps> = ({ className = '', size = 40, showText = true, isLight = false }) => {
+    const pixelSize = typeof size === 'number' ? size : 40;
+
     return (
         <div className={`flex items-center gap-4 ${className}`}>
             <img 
                 src={isLight ? logoLite : logoDark} 
                 alt="CodeArena Logo" 
                 className="object-contain transition-all duration-500"
-                style={{ width: size, height: size }}
+                style={{ width: `${pixelSize}px`, height: `${pixelSize}px` }}
             />
             {showText && (
                 <div className="flex flex-col" style={{ fontFamily: "'Orbitron', sans-serif" }}>

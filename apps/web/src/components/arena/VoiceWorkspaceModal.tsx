@@ -23,6 +23,7 @@ function parseVoiceToCode(transcript: string, language: string): string {
         : language === 'js' || language === 'javascript' ? 'javascript'
         : language === 'cpp' || language === 'c++' ? 'cpp'
         : language === 'java' ? 'java'
+        : language === 'c' ? 'c'
         : 'javascript';
 
     // ── Extract numbers from text ──
@@ -59,6 +60,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `for (let ${varName} = 0; ${varName} < ${num}; ${varName}++) {\n    \n}`;
             case 'cpp':
                 return `for (int ${varName} = 0; ${varName} < ${num}; ${varName}++) {\n    \n}`;
+            case 'c':
+                return `for (int ${varName} = 0; ${varName} < ${num}; ${varName}++) {\n    \n}`;
             case 'java':
                 return `for (int ${varName} = 0; ${varName} < ${num}; ${varName}++) {\n    \n}`;
         }
@@ -72,6 +75,7 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `while ${condition === 'true' ? 'True' : condition}:\n    pass`;
             case 'javascript':
                 return `while (${condition}) {\n    \n}`;
+            case 'c':
             case 'cpp':
             case 'java':
                 return `while (${condition}) {\n    \n}`;
@@ -91,6 +95,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `def ${name}(${params}):\n    pass`;
             case 'javascript':
                 return `function ${name}(${params}) {\n    \n}`;
+            case 'c':
+                return `void ${name}(${params ? 'int params' : ''}) {\n    \n}`;
             case 'cpp':
                 return `void ${name}(${params ? 'int params' : ''}) {\n    \n}`;
             case 'java':
@@ -117,6 +123,7 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return hasElse
                     ? `if (${condition}) {\n    \n} else {\n    \n}`
                     : `if (${condition}) {\n    \n}`;
+            case 'c':
             case 'cpp':
             case 'java':
                 return hasElse
@@ -137,6 +144,7 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `${name} = ${value}`;
             case 'javascript':
                 return `${isConst ? 'const' : 'let'} ${name} = ${value};`;
+            case 'c':
             case 'cpp':
                 return `int ${name} = ${value};`;
             case 'java':
@@ -152,6 +160,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `${name} = []`;
             case 'javascript':
                 return `const ${name} = [];`;
+            case 'c':
+                return `int ${name}[100];`;
             case 'cpp':
                 return `vector<int> ${name};`;
             case 'java':
@@ -167,6 +177,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `${name} = {}`;
             case 'javascript':
                 return `const ${name} = new Map();`;
+            case 'c':
+                return `/* No built-in map in C; use arrays or structs */`;
             case 'cpp':
                 return `unordered_map<int, int> ${name};`;
             case 'java':
@@ -182,6 +194,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `print(${msg})`;
             case 'javascript':
                 return `console.log(${msg});`;
+            case 'c':
+                return `printf("%d\\n", ${msg});`;
             case 'cpp':
                 return `cout << ${msg} << endl;`;
             case 'java':
@@ -197,6 +211,7 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `return ${val}`;
             case 'javascript':
                 return `return ${val};`;
+            case 'c':
             case 'cpp':
             case 'java':
                 return `return ${val};`;
@@ -211,6 +226,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `class ${name}:\n    def __init__(self):\n        pass`;
             case 'javascript':
                 return `class ${name} {\n    constructor() {\n        \n    }\n}`;
+            case 'c':
+                return `typedef struct ${name} {\n    /* fields */\n} ${name};`;
             case 'cpp':
                 return `class ${name} {\npublic:\n    ${name}() {\n        \n    }\n};`;
             case 'java':
@@ -225,6 +242,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `try:\n    pass\nexcept Exception as e:\n    pass`;
             case 'javascript':
                 return `try {\n    \n} catch (error) {\n    \n}`;
+            case 'c':
+                return `/* C has no exceptions; use error codes or setjmp/longjmp */`;
             case 'cpp':
                 return `try {\n    \n} catch (const exception& e) {\n    \n}`;
             case 'java':
@@ -240,6 +259,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `${name}.sort()`;
             case 'javascript':
                 return `${name}.sort((a, b) => a - b);`;
+            case 'c':
+                return `qsort(${name}, n, sizeof(int), cmp);`;
             case 'cpp':
                 return `sort(${name}.begin(), ${name}.end());`;
             case 'java':
@@ -254,6 +275,8 @@ function parseVoiceToCode(transcript: string, language: string): string {
                 return `a, b = b, a`;
             case 'javascript':
                 return `[a, b] = [b, a];`;
+            case 'c':
+                return `int temp = a;\na = b;\nb = temp;`;
             case 'cpp':
                 return `swap(a, b);`;
             case 'java':
@@ -415,12 +438,13 @@ export const VoiceWorkspaceModal: React.FC<VoiceWorkspaceModalProps> = ({
                         <select 
                             value={language} 
                             onChange={(e) => setLanguage(e.target.value)}
-                            className="bg-black/60 border border-white/10 rounded-lg px-4 py-2 text-xs font-black uppercase tracking-widest text-accent-secondary focus:outline-none focus:border-accent-secondary/40 cursor-pointer"
+                            className="bg-black border border-white/20 rounded-lg px-4 py-2 text-xs font-black uppercase tracking-widest text-accent-secondary focus:outline-none focus:border-accent-secondary/40 cursor-pointer shadow-lg"
                         >
-                            <option value="js">JavaScript</option>
-                            <option value="py">Python</option>
-                            <option value="java">Java</option>
-                            <option value="cpp">C++</option>
+                            <option value="js" className="bg-black text-white">JavaScript</option>
+                            <option value="py" className="bg-black text-white">Python</option>
+                            <option value="java" className="bg-black text-white">Java</option>
+                            <option value="cpp" className="bg-black text-white">C++</option>
+                            <option value="c" className="bg-black text-white">C</option>
                         </select>
                         <button onClick={() => { handleReset(); onClose(); }} className="p-2.5 text-gray-500 hover:text-white transition-colors rounded-xl hover:bg-white/10">
                             <X size={20} />
@@ -463,7 +487,7 @@ export const VoiceWorkspaceModal: React.FC<VoiceWorkspaceModalProps> = ({
                                 value={transcript}
                                 onChange={(e) => setTranscript(e.target.value)}
                                 placeholder={"Click Record and speak naturally...\n\nExamples:\n• \"for loop from 0 to n\"\n• \"create a function called solve\"\n• \"if statement check if x equals y\"\n• \"create an array called result\"\n• \"while loop condition true\"\n• \"print the value of result\"\n• \"create a hash map\"\n• \"return result\""}
-                                className="w-full h-full bg-black/40 border border-white/8 rounded-2xl p-5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-secondary/30 resize-none transition-all leading-relaxed font-mono"
+                                className="w-full h-full bg-black/40 border border-white/8 rounded-2xl p-5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-secondary/30 resize-none transition-all leading-relaxed font-sans"
                             />
                             {isListening && (
                                 <div className="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 border border-red-500/25">

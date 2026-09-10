@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
     NavigationState,
@@ -33,12 +33,13 @@ interface NavigationContextType {
     goToUserProfile: (userId: string) => void;
     goToSettings: () => void;
     goToOpponents: (problemId?: string) => void;
-    goToProblems: () => void;
+    goToProblems: (params?: { mode?: string }) => void;
     goToBattleLobby: () => void;
     goToTournament: () => void;
     goToArenaSolo: () => void;
     goToArenaPractice: (type?: string) => void;
     goToArenaMatch: (matchId: string, matchState?: any) => void;
+    goToHostedRoom: (roomCode: string) => void;
     goBack: () => void;
     openModal: (modal: ModalId) => void;
     closeModal: () => void;
@@ -130,7 +131,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const goToUserProfile = useCallback((userId: string) => navigateTo(PAGES.PROFILE, { userId }), [navigateTo]);
     const goToSettings = useCallback(() => navigateTo(PAGES.SETTINGS), [navigateTo]);
     const goToOpponents = useCallback((problemId?: string) => navigateTo(PAGES.OPPONENTS, problemId ? { problemId } : undefined), [navigateTo]);
-    const goToProblems = useCallback(() => navigateTo(PAGES.PROBLEMS), [navigateTo]);
+    const goToProblems = useCallback((params?: { mode?: string }) => navigateTo(PAGES.PROBLEMS, params), [navigateTo]);
     const goToBattleLobby = useCallback(() => navigateTo(PAGES.BATTLE), [navigateTo]);
     const goToTournament = useCallback(() => navigateTo(PAGES.TOURNAMENTS), [navigateTo]);
     const goToArenaSolo = useCallback(() => navigateTo(PAGES.ARENA_SOLO), [navigateTo]);
@@ -141,6 +142,10 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const goToArenaMatch = useCallback((matchId: string, matchState?: any) => {
         navigateTo(PAGES.ARENA_MATCH, { matchId, matchState });
+    }, [navigateTo]);
+
+    const goToHostedRoom = useCallback((roomCode: string) => {
+        navigateTo(PAGES.HOSTED_ROOM, { roomCode: roomCode.toUpperCase() });
     }, [navigateTo]);
 
     const goBack = useCallback(() => {
@@ -161,7 +166,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         dispatch({ type: 'CLOSE_MODAL' });
     }, []);
 
-    const value: NavigationContextType = {
+    const value: NavigationContextType = useMemo(() => ({
         state,
         dispatch,
         goToLanding,
@@ -182,6 +187,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         goToArenaSolo,
         goToArenaPractice,
         goToArenaMatch,
+        goToHostedRoom,
         goBack,
         openModal,
         closeModal,
@@ -189,7 +195,31 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         params: state.params,
         canGoBack: state.canGoBack,
         modal: state.modal,
-    };
+    }), [
+        state,
+        goToLanding,
+        goToDashboard,
+        goToLogin,
+        goToBattle,
+        goToPractice,
+        goToHistory,
+        goToTournaments,
+        goToLeaderboard,
+        goToProfile,
+        goToUserProfile,
+        goToSettings,
+        goToOpponents,
+        goToProblems,
+        goToBattleLobby,
+        goToTournament,
+        goToArenaSolo,
+        goToArenaPractice,
+        goToArenaMatch,
+        goToHostedRoom,
+        goBack,
+        openModal,
+        closeModal
+    ]);
 
     return (
         <NavigationContext.Provider value={value}>

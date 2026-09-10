@@ -16,6 +16,7 @@ export const PAGES = {
     ARENA_PRACTICE: 'arena_practice',
     ARENA_MATCH: 'arena_match',
     PROBLEMS: 'problems',
+    HOSTED_ROOM: 'hosted_room',
 } as const;
 
 export type PageId = (typeof PAGES)[keyof typeof PAGES];
@@ -45,6 +46,7 @@ export const PAGE_TO_PATH: Record<PageId, string> = {
     [PAGES.ARENA_PRACTICE]: '/arena/practice',
     [PAGES.ARENA_MATCH]: '/arena/:matchId',
     [PAGES.PROBLEMS]: '/problems',
+    [PAGES.HOSTED_ROOM]: '/hosted/:roomCode',
 };
 
 /** Resolve a URL pathname to a PageId. Handles dynamic segments like /arena/:matchId. */
@@ -68,43 +70,62 @@ export function pathToPage(pathname: string): { page: PageId; params: NavParams 
         '/problems': PAGES.PROBLEMS,
     };
 
-    if (staticMap[pathname]) {
-        return { page: staticMap[pathname], params };
+    const [pathOnly, searchOnly] = pathname.split('?');
+    const searchParams = new URLSearchParams(
+        searchOnly || (typeof window !== 'undefined' ? window.location.search : '')
+    );
+    if (searchParams.get('type')) params.practiceType = searchParams.get('type')!;
+    if (searchParams.get('practiceType')) params.practiceType = searchParams.get('practiceType')!;
+    if (searchParams.get('problemId')) params.problemId = searchParams.get('problemId')!;
+    if (searchParams.get('mode')) params.mode = searchParams.get('mode')!;
+
+    if (staticMap[pathOnly]) {
+        return { page: staticMap[pathOnly], params };
     }
 
     // /arena/practice with optional query params
-    if (pathname === '/arena/practice' || pathname.startsWith('/arena/practice')) {
+    if (pathOnly === '/arena/practice' || pathOnly.startsWith('/arena/practice')) {
         return { page: PAGES.ARENA_PRACTICE, params };
     }
 
+    // /hosted/:roomCode
+    const hostedMatch = pathOnly.match(/^\/hosted\/(.+)$/);
+    if (hostedMatch) {
+        return { page: PAGES.HOSTED_ROOM, params: { roomCode: hostedMatch[1].toUpperCase() } };
+    }
+
     // /arena/:matchId — any /arena/* that isn't solo or practice
-    const arenaMatch = pathname.match(/^\/arena\/(.+)$/);
+    const arenaMatch = pathOnly.match(/^\/arena\/(.+)$/);
     if (arenaMatch) {
-        params.matchId = arenaMatch[1];
-        return { page: PAGES.ARENA_MATCH, params };
+        return { page: PAGES.ARENA_MATCH, params: { matchId: arenaMatch[1] } };
     }
 
     // /profile/:userId
-    const profileMatch = pathname.match(/^\/profile\/(.+)$/);
+    const profileMatch = pathOnly.match(/^\/profile\/(.+)$/);
     if (profileMatch) {
-        params.userId = profileMatch[1];
-        return { page: PAGES.PROFILE, params };
+        return { page: PAGES.PROFILE, params: { userId: profileMatch[1] } };
     }
 
     // Fallback
-    return { page: PAGES.DASHBOARD, params };
+    return { page: PAGES.LANDING, params: {} };
 }
 
-/** Build a URL path from a PageId + params. */
+/** Resolve a PageId + NavParams to a URL pathname. */
 export function pageToPath(page: PageId, params?: NavParams): string {
     if (page === PAGES.ARENA_MATCH && params?.matchId) {
         return `/arena/${params.matchId}`;
+    }
+    if (page === PAGES.HOSTED_ROOM && params?.roomCode) {
+        return `/hosted/${params.roomCode}`;
     }
     if (page === PAGES.ARENA_PRACTICE && params?.practiceType) {
         return `/arena/practice?type=${params.practiceType}`;
     }
     if (page === PAGES.OPPONENTS && params?.problemId) {
         return `/opponents?problemId=${params.problemId}`;
+    }
+    if (page === PAGES.PROBLEMS && params?.mode) {
+        return `/problems?mode=${params.mode}`;
     }
     if (page === PAGES.PROFILE && params?.userId) {
         return `/profile/${params.userId}`;
@@ -116,10 +137,12 @@ export function pageToPath(page: PageId, params?: NavParams): string {
 
 export interface NavParams {
     matchId?: string;
+    roomCode?: string;
     practiceType?: string;
     matchState?: any;
     problemId?: string;
     userId?: string;
+    mode?: string;
 }
 
 export interface NavigationState {

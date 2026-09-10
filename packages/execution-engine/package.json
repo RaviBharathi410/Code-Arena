@@ -1,0 +1,26 @@
+{
+  "name": "@codearena/execution-engine",
+  "version": "1.0.0",
+  "description": "CodeArena NsJail-backed execution engine package",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/api/server.ts",
+    "test": "jest --preset ts-jest",
+    "test:security": "jest --preset ts-jest tests/adversarial"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "@types/uuid": "^9.0.8",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

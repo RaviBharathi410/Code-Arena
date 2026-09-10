@@ -18,17 +18,31 @@ export class MatchmakingQueue {
     async addToQueue(userId: string, eloRating: number): Promise<void> {
         this.memQueue.set(userId, { elo: eloRating, joinedAt: Date.now() });
         if (isRedisReady()) {
-            await redis.zadd(QUEUE_KEY, eloRating, userId);
+            redis.zadd(QUEUE_KEY, eloRating, userId).catch(err => logger.warn({ err }, '[MATCHMAKING] Redis zadd failed'));
         }
         logger.info({ userId, eloRating, redisAvailable: isRedisReady() }, '[MATCHMAKING] Player added to queue');
+
+        // Check immediately for instant match
+        try {
+            const pair = await this.tryPairPlayers();
+            if (pair && this.onMatchFound) {
+                this.onMatchFound(pair);
+            }
+        } catch (err) {
+            logger.error({ err }, '[MATCHMAKING] Instant pairing error');
+        }
     }
 
     async removeFromQueue(userId: string): Promise<void> {
         this.memQueue.delete(userId);
         if (isRedisReady()) {
-            await redis.zrem(QUEUE_KEY, userId);
+            redis.zrem(QUEUE_KEY, userId).catch(err => logger.warn({ err }, '[MATCHMAKING] Redis zrem failed'));
         }
         logger.info({ userId }, '[MATCHMAKING] Player removed from queue');
+    }
+
+    hasUser(userId: string): boolean {
+        return this.memQueue.has(userId);
     }
 
     async getQueueSize(): Promise<number> {
@@ -47,9 +61,9 @@ export class MatchmakingQueue {
         for (let i = 0; i < players.length - 1; i++) {
             for (let j = i + 1; j < players.length; j++) {
                 const eloDiff = Math.abs(players[i].eloRating - players[j].eloRating);
-                // Expand range for players waiting > 30 seconds
+                // Expand range for players waiting; after 5s force-pair any two live players in queue
                 const waitTime = Math.max(now - players[i].joinedAt, now - players[j].joinedAt);
-                const effectiveRange = ELO_RANGE + Math.floor(waitTime / 5000) * 100;
+                const effectiveRange = waitTime >= 5000 ? 10000 : (ELO_RANGE + Math.floor(waitTime / 5000) * 100);
 
                 if (eloDiff <= effectiveRange) {
                     this.memQueue.delete(players[i].userId);
@@ -67,10 +81,10 @@ export class MatchmakingQueue {
         // Always try in-memory first (it's the single source of truth now)
         const pair = this.tryPairFromMemory();
         if (pair) {
-            // Also remove from Redis if available
+            // Also remove from Redis in background if available
             if (isRedisReady()) {
-                await redis.zrem(QUEUE_KEY, pair.player1Id);
-                await redis.zrem(QUEUE_KEY, pair.player2Id);
+                redis.zrem(QUEUE_KEY, pair.player1Id).catch(() => {});
+                redis.zrem(QUEUE_KEY, pair.player2Id).catch(() => {});
             }
             return pair;
         }

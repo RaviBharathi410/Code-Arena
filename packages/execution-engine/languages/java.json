@@ -1,0 +1,20 @@
+{
+  "id": "java",
+  "name": "Java 25",
+  "sourceFile": "Main.java",
+  "compile": [
+    "/usr/lib/jvm/java-25-openjdk-amd64/bin/javac",
+    "-J-Xmx64m",
+    "Main.java"
+  ],
+  "run": [
+    "/usr/lib/jvm/java-25-openjdk-amd64/bin/java",
+    "-Xmx128m",
+    "-XX:ActiveProcessorCount=1",
+    "-XX:CICompilerCount=2",
+    "-Xshare:off",
+    "Main"
+  ],
+  "compileTimeoutMs": 10000,
+  "runTimeoutMs": 3000
+}

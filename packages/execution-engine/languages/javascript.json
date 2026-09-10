@@ -1,0 +1,9 @@
+{
+  "id": "javascript",
+  "name": "JavaScript",
+  "sourceFile": "main.js",
+  "compile": null,
+  "run": ["/usr/bin/node", "main.js"],
+  "compileTimeoutMs": 0,
+  "runTimeoutMs": 3000
+}

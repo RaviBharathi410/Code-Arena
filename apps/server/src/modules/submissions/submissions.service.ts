@@ -1,18 +1,17 @@
 import { MatchRoom } from '../../models/MatchRoom';
 import { Problem } from '../../models/Problem';
 import { Submission } from '../../models/Submission';
-import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { logger } from '../../lib/logger';
 import { matchesService } from '../matches/matches.service';
 import { codeExecutionQueue } from '../../queues';
 
-export const LANGUAGE_MAP: Record<string, number> = {
-    js: 63,
-    py: 71,
-    java: 62,
-    cpp: 54,
-    go: 60,
-    rust: 73,
+export const LANGUAGE_MAP: Record<string, string> = {
+    js: 'javascript',
+    py: 'python3',
+    java: 'java',
+    cpp: 'cpp17',
+    c: 'c',
 };
 
 export class SubmissionsService {
@@ -22,6 +21,7 @@ export class SubmissionsService {
         code: string;
         language: string;
         mode: 'run' | 'submit';
+        customInputs?: string;
     }) {
         const languageId = LANGUAGE_MAP[data.language];
         if (!languageId) throw new Error('Unsupported language');
@@ -34,24 +34,39 @@ export class SubmissionsService {
         const problem = await Problem.findById(match.problemId).lean();
         if (!problem) throw new Error('Problem not found');
 
-        // If 'run' mode, we run up to 25 sample test cases
-        // If 'submit' mode, we run ALL test cases including hidden ones
-        const testCasesToRun = data.mode === 'run' 
-            ? (problem.testCases as any[]).filter(tc => !tc.is_hidden).slice(0, 25)
-            : (problem.testCases as any[]);
+        let testCasesToRun;
+        if (data.customInputs) {
+            // Use custom inputs as a single testcase with no expected output
+            // Parse it to ensure it's valid JSON if possible, but store it as string for the queue
+            let parsedInput;
+            try {
+                parsedInput = JSON.parse(data.customInputs);
+            } catch {
+                parsedInput = data.customInputs; // Fallback to raw string
+            }
+            testCasesToRun = [{ input: parsedInput, expected: null }];
+        } else {
+            // If 'run' mode, we run up to 25 sample test cases
+            // If 'submit' mode, we run ALL test cases including hidden ones
+            testCasesToRun = data.mode === 'run'
+                ? (problem.testCases as any[]).filter(tc => !tc.is_hidden).slice(0, 25)
+                : (problem.testCases as any[]);
+        }
 
-        const submissionId = crypto.randomUUID();
+        let submissionId: string;
 
-        // For 'submit' mode, we persist the submission record
+        // For 'submit' mode, we persist the submission record with matching ObjectId
         if (data.mode === 'submit') {
-            await Submission.create({
-                _id: submissionId,
+            const submission = await Submission.create({
                 matchId: data.matchId,
                 userId: data.userId,
                 code: data.code,
                 language: data.language,
                 status: 'PENDING',
             });
+            submissionId = submission._id.toString();
+        } else {
+            submissionId = new mongoose.Types.ObjectId().toString();
         }
 
         // Enqueue execution
@@ -59,7 +74,7 @@ export class SubmissionsService {
             submissionId,
             code: data.code,
             languageId,
-            problemId: match.problemId,
+            problemId: match.problemId.toString(),
             matchId: data.matchId,
             userId: data.userId,
             testCases: testCasesToRun,
@@ -82,7 +97,7 @@ export class SubmissionsService {
         matchId: string;
         userId: string;
         code: string;
-        languageId: number;
+        languageId: string;
     }) {
         const language = Object.keys(LANGUAGE_MAP).find(key => LANGUAGE_MAP[key] === data.languageId) || 'js';
         return this.executeCode({

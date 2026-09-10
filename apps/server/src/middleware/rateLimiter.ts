@@ -51,6 +51,22 @@ export const abuseLimiter = rateLimit({
     },
 });
 
+// ── express-rate-limit: AI endpoints limiter ──────────────────────────────
+// Protects free-tier AI tokens and enforces debouncing / quota budgeting.
+
+export const aiLimiter = rateLimit({
+    windowMs: 60 * 1000,        // 1 minute
+    max: 20,                   // Max 20 requests per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        logger.warn({ ip: req.ip, path: req.originalUrl }, '[SECURITY] AI rate limit exceeded');
+        res.status(429).json({
+            error: 'AI request limit reached. Please pause briefly before sending more AI requests.'
+        });
+    },
+});
+
 /**
  * Initialize rate limiter with fallback logic.
  * Note: RateLimiterRedis is preferred for distributed state, 

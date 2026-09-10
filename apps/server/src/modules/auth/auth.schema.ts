@@ -23,9 +23,17 @@ export const updateProfileSchema = z.object({
     email: z.string().email().optional(),
 });
 
+export const googleAuthSchema = z.object({
+    credential: z.string().min(1, 'Google credential token is required'),
+});
+
+export type GoogleAuthInput = z.infer<typeof googleAuthSchema>;
+
 // ── Wrapped body schemas for use with validate() middleware ────────────────
 // validate() passes { body, query, params } — these schemas expect that shape.
 
 export const registerBodySchema = z.object({ body: registerSchema });
 export const loginBodySchema = z.object({ body: loginSchema });
 export const updateProfileBodySchema = z.object({ body: updateProfileSchema });
+export const googleAuthBodySchema = z.object({ body: googleAuthSchema });
+

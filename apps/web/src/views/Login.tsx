@@ -6,9 +6,10 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import {
     Activity, Mail, Lock, User, ArrowRight,
-    Zap, Shield, Sword, Eye, EyeOff,
+    Zap, Shield, Sword, Eye, EyeOff, Sparkles
 } from 'lucide-react';
 import { Logo } from '../components/ui/Logo';
+import { GoogleAuthButton } from '../components/auth/GoogleAuthButton';
 
 export const Login: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -23,6 +24,9 @@ export const Login: React.FC = () => {
 
     const { goToDashboard } = useNav();
     const setAuth = useAuthStore((state) => state.setAuth);
+    const loginWithGoogle = useAuthStore((state) => state.loginWithGoogle);
+    const loginAsDemo = useAuthStore((state) => state.loginAsDemo);
+    const [demoLoading, setDemoLoading] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const cardRef = useRef<HTMLDivElement>(null);
@@ -86,7 +90,7 @@ export const Login: React.FC = () => {
                     identifier,
                     password
                 });
-                
+
                 sessionObj = { access_token: response.data.accessToken };
                 userObj = response.data.user;
             } else {
@@ -123,6 +127,32 @@ export const Login: React.FC = () => {
         setUsername('');
     };
 
+    const handleGoogleSuccess = async (credential: string) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await loginWithGoogle(credential);
+            goToDashboard();
+        } catch (err: any) {
+            setError(err.message || 'Google authentication failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDemoLogin = async () => {
+        setDemoLoading(true);
+        setError(null);
+        try {
+            await loginAsDemo();
+            goToDashboard();
+        } catch (err: any) {
+            setError(err.message || 'Failed to initialize demo session');
+        } finally {
+            setDemoLoading(false);
+        }
+    };
+
     const isSubmitDisabled = loading || (isLogin ? (!identifier || !password) : (!email || !password || !username));
 
     return (
@@ -154,27 +184,30 @@ export const Login: React.FC = () => {
                         </div>
                     ))}
                 </div>
-                <p className="text-[10px] text-white/20 font-mono">CODEARENA v2.0</p>
+                <p className="text-[10px] text-white/20 font-bold uppercase tracking-wider">CODEARENA v2.0</p>
             </div>
 
-            {/* Auth card */}
-            <div ref={cardRef} className="relative w-full max-w-sm mx-4">
-                {/* Glow border */}
-                <div className="absolute -inset-px rounded-2xl"
-                    style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.25), transparent 50%, rgba(52,211,153,0.1))', borderRadius: '1rem' }} />
+            {/* Main auth card */}
+            <div ref={cardRef} className="relative z-10 w-full max-w-md mx-4">
+                <div className="relative rounded-2xl border border-white/10 bg-[#0c0c14]/90 backdrop-blur-xl p-8 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden">
+                    {/* Top ambient accent line */}
+                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-secondary/50 to-transparent" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-[#0a0a0e]/95 backdrop-blur-xl p-8 shadow-[0_0_60px_rgba(124,58,237,0.08)]">
                     {/* Header */}
-                    <div className="mb-8 text-center flex flex-col items-center">
-                        <Logo className="mb-4" size={40} showText={false} />
-                        <h1 className="text-2xl font-bold tracking-tight">CodeArena</h1>
-                        <p className="text-sm text-white/40 mt-1">
-                            {isLogin ? 'Authenticate to enter the battlefield' : 'Register as a new operator'}
+                    <div className="text-center mb-8">
+                        <div className="flex justify-center mb-4">
+                            <Logo size={40} showText={false} className="justify-center" />
+                        </div>
+                        <h1 className="text-xl font-bold tracking-tight text-white/90">
+                            {isLogin ? 'Access Battle' : 'Create Operator Account'}
+                        </h1>
+                        <p className="mt-1.5 text-xs text-white/40">
+                            {isLogin ? 'Establish uplink to your competitive profile' : 'Initialize your rank rating and begin calibration'}
                         </p>
                     </div>
 
-                    {/* Mode switcher */}
-                    <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-1 mb-7">
+                    {/* Mode toggle tabs */}
+                    <div className="flex rounded-xl bg-white/[0.03] border border-white/[0.06] p-1 mb-6">
                         <button type="button" onClick={() => { if (!isLogin) switchMode(); }}
                             className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${isLogin ? 'bg-accent-secondary text-white shadow-[0_0_15px_rgba(124,58,237,0.3)]' : 'text-white/40 hover:text-white/70'}`}>
                             Sign In
@@ -242,22 +275,62 @@ export const Login: React.FC = () => {
                             </div>
                         )}
 
-                        <button type="submit" disabled={isSubmitDisabled}
-                            className="auth-field w-full h-12 mt-3 rounded-xl bg-gradient-to-r from-accent-secondary to-purple-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(124,58,237,0.3)] hover:shadow-[0_0_35px_rgba(124,58,237,0.5)] hover:-translate-y-0.5 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none">
-                            {loading ? (
-                                <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Authenticating...</>
-                            ) : isLogin ? (
-                                <><Zap size={15} /> Enter the Arena <ArrowRight size={14} /></>
+                        <div className="auth-field pt-4">
+                            <button type="submit" disabled={isSubmitDisabled}
+                                className="w-full h-12 rounded-xl bg-gradient-to-r from-accent-secondary to-purple-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(124,58,237,0.3)] hover:shadow-[0_0_35px_rgba(124,58,237,0.5)] hover:-translate-y-0.5 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none">
+                                {loading ? (
+                                    <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Authenticating...</>
+                                ) : isLogin ? (
+                                    <><Zap size={15} /> Enter the Arena <ArrowRight size={14} /></>
+                                ) : (
+                                    <><Sword size={15} /> Deploy Operator <ArrowRight size={14} /></>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+
+                    {/* Divider */}
+                    <div className="auth-field my-5 flex items-center gap-3">
+                        <div className="h-px flex-1 bg-white/10" />
+                        <span className="text-[10px] font-bold tracking-widest text-white/30 uppercase">OR SECURE UPLINK WITH</span>
+                        <div className="h-px flex-1 bg-white/10" />
+                    </div>
+
+                    {/* Google Auth Button */}
+                    <div className="auth-field">
+                        <GoogleAuthButton
+                            onSuccess={handleGoogleSuccess}
+                            onError={(err) => setError(err)}
+                            disabled={loading || demoLoading}
+                        />
+                    </div>
+
+                    {/* Recruiter / Instant Demo Mode Button */}
+                    <div className="auth-field mt-3">
+                        <button
+                            type="button"
+                            onClick={handleDemoLogin}
+                            disabled={loading || demoLoading}
+                            className="w-full h-11 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed group"
+                        >
+                            {demoLoading ? (
+                                <>
+                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-300/30 border-t-purple-300" />
+                                    <span>Calibrating Demo Operator...</span>
+                                </>
                             ) : (
-                                <><Sword size={15} /> Deploy Operator <ArrowRight size={14} /></>
+                                <>
+                                    <Sparkles size={14} className="text-purple-300 group-hover:scale-110 transition-transform" />
+                                    <span>Explore Demo (No Account Required)</span>
+                                </>
                             )}
                         </button>
-                    </form>
+                    </div>
 
                     <p className="mt-6 text-center text-xs text-white/30">
                         {isLogin ? "New here?" : "Already registered?"}{' '}
                         <button type="button" onClick={switchMode}
-                            className="text-accent-secondary hover:text-emerald-400 underline underline-offset-2 transition-colors">
+                            className="text-accent-primary hover:text-white underline underline-offset-2 transition-colors">
                             {isLogin ? 'Create an account' : 'Sign in instead'}
                         </button>
                     </p>

@@ -51,7 +51,7 @@ const OFFLINE_TOURNAMENTS: Tournament[] = [
 ];
 
 const OFFLINE_LEADERBOARD: LeaderboardEntry[] = [
-    { rank: 1, userId: 'm1', username: 'Ghost_Runner_32', rankRating: 4820, wins: 312, winRate: 79.6, tier: 'OPERATOR' },
+    { rank: 1, userId: 'm1', username: 'Ghost_Runner_32', rankRating: 4820, wins: 312, winRate: 79.6, tier: 'GRANDMASTER' },
     { rank: 2, userId: 'm2', username: 'NeonShadow_X', rankRating: 4611, wins: 289, winRate: 75.2, tier: 'DIAMOND' },
     { rank: 3, userId: 'm3', username: 'CipherKnight', rankRating: 4430, wins: 261, winRate: 71.3, tier: 'DIAMOND' },
 ];

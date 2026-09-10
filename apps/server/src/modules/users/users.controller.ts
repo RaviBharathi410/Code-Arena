@@ -14,6 +14,11 @@ export class UsersController {
     }
 
     async updateProfile(req: any, res: Response) {
+        if (req.user?.isDemo) {
+            return res.status(403).json({
+                message: 'Account modifications are restricted in Demo mode. Register an account to persist custom credentials.'
+            });
+        }
         try {
             const user = await usersService.updateProfile(req.params.id, req.body);
             const { passwordHash, ...safeUser } = user;

@@ -104,6 +104,10 @@
     .orbitron {
         font-family: 'Orbitron', sans-serif !important;
     }
+
+    code, pre, kbd, samp {
+        font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace !important;
+    }
 }
 
 @layer components {
@@ -113,6 +117,52 @@
 
     .glass-effect {
         @apply bg-bg-surface/60 backdrop-blur-xl border border-border-subtle;
+    }
+
+    /* Cyberpunk HUD & Arena Elements */
+    .cyber-card {
+        @apply relative rounded-3xl border border-white/10 bg-[#0d0d14]/80 backdrop-blur-xl transition-all duration-300;
+    }
+
+    .cyber-card-glow {
+        @apply cyber-card hover:border-accent-secondary/50 hover:shadow-[0_0_30px_rgba(124,58,237,0.2)] hover:-translate-y-0.5;
+    }
+
+    .cyber-pill {
+        @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-sans font-semibold bg-white/5 border border-white/10 text-zinc-300;
+    }
+
+    .light .cyber-pill {
+        @apply bg-purple-50 border-purple-200 text-purple-900 shadow-sm;
+    }
+
+    .cyber-badge-win {
+        @apply px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)];
+    }
+
+    .cyber-badge-loss {
+        @apply px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.2)];
+    }
+
+    .cyber-badge-live {
+        @apply px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse;
+    }
+
+    /* Cyber grid overlay */
+    .bg-cyber-grid {
+        background-size: 32px 32px;
+        background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+
+    /* Subtle scanlines effect */
+    .scanlines-overlay {
+        background: linear-gradient(
+            rgba(18, 16, 16, 0) 50%, 
+            rgba(0, 0, 0, 0.25) 50%
+        );
+        background-size: 100% 4px;
+        pointer-events: none;
     }
 }
 
@@ -146,4 +196,13 @@
 
 .animate-loading {
     animation: loading-slide 2s infinite linear;
+}
+
+@keyframes cyber-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.96); }
+}
+
+.animate-cyber-pulse {
+    animation: cyber-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

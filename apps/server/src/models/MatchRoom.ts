@@ -14,6 +14,8 @@ export interface IMatchRoom extends Document {
     startedAt?: Date;
     endedAt?: Date;
     winnerId?: mongoose.Types.ObjectId;
+    deltaP1?: number;
+    deltaP2?: number;
     createdAt: Date;
 }
 
@@ -31,6 +33,8 @@ const matchRoomSchema = new Schema<IMatchRoom>({
     startedAt: { type: Date },
     endedAt: { type: Date },
     winnerId: { type: Schema.Types.ObjectId, ref: 'User' },
+    deltaP1: { type: Number, default: 0 },
+    deltaP2: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 

@@ -14,7 +14,7 @@ export function createAsyncState<T>(initial: T): AsyncState<T> {
 
 // ── Difficulty ────────────────────────────────────────────────────────────
 
-export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD' | 'EXTREME';
+export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 // ── User & Auth ──────────────────────────────────────────────────────────
 
@@ -27,7 +27,10 @@ export interface User {
     losses: number;
     totalBattles: number;
     winRate: number;
-    tier: 'IRON' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'OPERATOR';
+    tier: 'PLACEMENT' | 'IRON' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'GRANDMASTER';
+    placementMatchesRemaining?: number;
+    isCalibrated?: boolean;
+    isDemo?: boolean;
     avatarUrl?: string;
     lastActive?: string;
 }
@@ -57,6 +60,12 @@ export interface Problem {
     examples: Example[];
     testCases: TestCase[];
     boilerplate: Record<string, string>;
+    problemType?: 'function' | 'stdin-stdout';
+    functionName?: string;
+    returnType?: string;
+    parameters?: any[];
+    driverTemplates?: Record<string, string>;
+    cfRating?: number;
     optimalTimeComplexity?: string;
     optimalSpaceComplexity?: string;
     tags?: string[];

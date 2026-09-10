@@ -1,0 +1,18 @@
+{
+  "id": "cpp17",
+  "name": "C++ 17",
+  "sourceFile": "main.cpp",
+  "compile": [
+    "/usr/bin/g++",
+    "main.cpp",
+    "-O2",
+    "-std=c++17",
+    "-o",
+    "main"
+  ],
+  "run": [
+    "./main"
+  ],
+  "compileTimeoutMs": 10000,
+  "runTimeoutMs": 2000
+}

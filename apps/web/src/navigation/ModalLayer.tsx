@@ -4,6 +4,7 @@ import {
     CheckCircle2, Cpu, X, Timer, Layers, 
     Zap, TrendingUp, ShieldAlert 
 } from 'lucide-react';
+import { IncomingChallengeModal } from '../components/arena/IncomingChallengeModal';
 
 // ── Modal Layer ───────────────────────────────────────────────────────────
 // Renders the active modal from navigation context as a global overlay.
@@ -12,26 +13,29 @@ import {
 const ModalLayer: React.FC = () => {
     const { modal, closeModal } = useNav();
 
-    if (!modal) return null;
-
     return (
-        <div className="fixed inset-0 z-[200]">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                onClick={closeModal}
-            />
+        <>
+            <IncomingChallengeModal />
+            {modal && (
+                <div className="fixed inset-0 z-[200]">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                        onClick={closeModal}
+                    />
 
-            {/* Modal Content */}
-            <div className="relative z-10 flex items-center justify-center h-full p-6">
-                {modal === MODALS.CONFIRM_LEAVE && (
-                    <ConfirmLeaveModal onClose={closeModal} />
-                )}
-                {modal === MODALS.MATCH_RESULTS && (
-                    <MatchResultsModal onClose={closeModal} />
-                )}
-            </div>
-        </div>
+                    {/* Modal Content */}
+                    <div className="relative z-10 flex items-center justify-center h-full p-6">
+                        {modal === MODALS.CONFIRM_LEAVE && (
+                            <ConfirmLeaveModal onClose={closeModal} />
+                        )}
+                        {modal === MODALS.MATCH_RESULTS && (
+                            <MatchResultsModal onClose={closeModal} />
+                        )}
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 
@@ -99,7 +103,7 @@ const MatchResultsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return (
         <div className="w-full max-w-4xl bg-[#08080c]/90 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.8)] flex flex-col md:flex-row backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
             {/* Left Column: Status Badge */}
-            <div className={`w-full md:w-80 p-10 flex flex-col justify-between relative overflow-hidden shrink-0 ${isVictory ? 'bg-gradient-to-br from-violet-600 to-indigo-700' : 'bg-gradient-to-br from-red-600 to-rose-700'}`}>
+            <div className={`w-full md:w-80 p-10 flex flex-col justify-between relative overflow-hidden shrink-0 ${isVictory ? 'bg-gradient-to-br from-purple-600 to-violet-800' : 'bg-gradient-to-br from-red-600 to-rose-700'}`}>
                 <div className="space-y-2 relative z-10">
                     <p className="text-white/60 text-[9px] font-black uppercase tracking-[0.3em]">Protocol Status</p>
                     <h2 className="text-5xl font-black text-white leading-none tracking-tighter uppercase">{result}</h2>

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { ChevronDown, Github, X, Check, Terminal, Shield, Zap, MessageSquare, BookOpen, Activity, Users, FileCode, Server, Code2 } from 'lucide-react';
+import { ChevronDown, Github, X, Check, Terminal, Shield, Zap, MessageSquare, BookOpen, Activity, Users, FileCode, Server, Code2, Sparkles } from 'lucide-react';
 import { Logo } from '../components/ui/Logo';
 import { useLenis } from '../hooks/useLenis';
+import { useAuthStore } from '../store/useAuthStore';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -132,9 +133,23 @@ const FaqRow: React.FC<{ item: FaqItem; open: boolean; onToggle: () => void }> =
 
 export const Landing: React.FC = () => {
     const nav = useNavigate();
+    const loginAsDemo = useAuthStore((state) => state.loginAsDemo);
+    const [demoLoading, setDemoLoading] = useState(false);
     const reducedMotion = useReducedMotion();
     const lenis = useLenis();
     const rootRef = useRef<HTMLDivElement>(null);
+
+    const handleDemoClick = async () => {
+        setDemoLoading(true);
+        try {
+            await loginAsDemo();
+            nav('/dashboard');
+        } catch {
+            nav('/login');
+        } finally {
+            setDemoLoading(false);
+        }
+    };
 
     // Section refs
     const navbarRef = useRef<HTMLDivElement>(null);
@@ -447,7 +462,7 @@ export const Landing: React.FC = () => {
                             gsap.fromTo(labels[0], { innerText: '0' }, {
                                 innerText: '20', duration: 1.2, ease: 'power2.out',
                                 snap: { innerText: 1 },
-                                onUpdate: function() {
+                                onUpdate: function () {
                                     (labels[0] as HTMLElement).textContent = Math.round(Number(gsap.getProperty(labels[0], 'innerText'))) + '%';
                                 },
                             });
@@ -456,7 +471,7 @@ export const Landing: React.FC = () => {
                             gsap.fromTo(labels[1], { innerText: '0' }, {
                                 innerText: '70', duration: 1.6, ease: 'power2.out', delay: 0.3,
                                 snap: { innerText: 1 },
-                                onUpdate: function() {
+                                onUpdate: function () {
                                     (labels[1] as HTMLElement).textContent = Math.round(Number(gsap.getProperty(labels[1], 'innerText'))) + '%';
                                 },
                             });
@@ -516,8 +531,8 @@ export const Landing: React.FC = () => {
             <Backdrop />
 
             {/* Top nav (matches reference: links + login/signup) */}
-            <div ref={navbarRef} className="fixed top-0 left-0 right-0 z-50 mx-auto w-full max-w-6xl px-6 pt-8" style={{ borderBottom: '1px solid transparent' }}>
-                <div className="flex items-center justify-between">
+            <div ref={navbarRef} className="fixed top-0 left-0 right-0 z-50 mx-auto w-full max-w-6xl mt-2    bg-[#050507]">
+                <div className="flex items-center justify-between p-3">
                     <Logo isLight={false} />
 
                     <div className="hidden lg:flex items-center gap-8 text-xs font-medium text-white/55">
@@ -528,7 +543,16 @@ export const Landing: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
+                        <button
+                            type="button"
+                            onClick={handleDemoClick}
+                            disabled={demoLoading}
+                            className="h-9 sm:h-10 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 px-3.5 sm:px-4 text-xs font-semibold text-white transition-all flex items-center gap-1.5"
+                        >
+                            <Sparkles size={13} className="text-purple-300" />
+                            <span>Demo</span>
+                        </button>
                         <button
                             type="button"
                             onClick={() => nav('/login')}
@@ -546,7 +570,7 @@ export const Landing: React.FC = () => {
                     </div>
                 </div>
             </div>            {/* Hero (LogoDiffusion-like) */}
-            <div ref={heroRef} className="relative z-10 mx-auto w-full max-w-6xl px-6 pt-28 pb-10">
+            <div ref={heroRef} className="relative z-10 mx-auto w-full max-w-6xl px-6 min-h-screen min-h-[100svh] flex flex-col justify-center items-center pt-24 pb-16">
                 {/* Radial glow for parallax depth */}
                 <div
                     ref={heroGlowRef}
@@ -566,30 +590,56 @@ export const Landing: React.FC = () => {
                         </div>
                     </div>
 
-                    <h1 className="mt-10 text-5xl md:text-7xl font-semibold tracking-tight leading-[1.04] text-white">
+                    <h1 className="mt-8 sm:mt-10 text-5xl md:text-7xl font-semibold tracking-tight leading-[1.04] text-white">
                         <span ref={heroH1Line1Ref} className="inline-block">Turn Any <span className="text-accent-secondary">Idea</span> Into</span>
                         <span ref={heroH1Line2Ref} className="block">a Professional <span className="text-accent-secondary">Battle</span></span>
                     </h1>
 
                     <div data-hero-sub>
-                        <p ref={heroSubtitleRef} className="mt-6 text-sm md:text-base text-white/50 max-w-2xl mx-auto leading-relaxed">
+                        <p ref={heroSubtitleRef} className="mt-5 sm:mt-6 text-sm md:text-base text-white/50 max-w-2xl mx-auto leading-relaxed">
                             Competitive coding duels with voice + realtime notes. Live complexity signals. Score, points, and grades based on your battle logs.
                         </p>
 
-                        <div ref={heroCtaRef} className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-6">
+                        <div ref={heroCtaRef} className="mt-8 sm:mt-9 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-5">
                             <button
                                 type="button"
                                 data-cursor-hover
                                 onClick={() => nav('/login?mode=register')}
-                                className="h-12 rounded-xl bg-accent-secondary px-8 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.22)] hover:bg-accent-secondary/90 transition-colors"
+                                className="h-12 w-full sm:w-auto rounded-xl bg-accent-secondary px-8 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.22)] hover:bg-accent-secondary/90 transition-colors"
                             >
                                 Generate My Rank
+                            </button>
+                            <button
+                                type="button"
+                                data-cursor-hover
+                                onClick={handleDemoClick}
+                                disabled={demoLoading}
+                                className="h-12 w-full sm:w-auto rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 px-7 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                            >
+                                {demoLoading ? (
+                                    <>
+                                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-300/30 border-t-purple-300" />
+                                        <span>Calibrating...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={15} className="text-purple-300" />
+                                        <span>Explore Demo</span>
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Feature cards grid (2-up, matching reference composition) */}
+                {/* Subtle scroll cue at bottom of hero */}
+                <a
+                    href="#features"
+                    className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[10px] font-bold tracking-wider text-white/35 hover:text-white/80 transition-colors uppercase cursor-pointer z-20"
+                >
+                    <span>Scroll</span>
+                    <ChevronDown size={14} className="animate-bounce text-accent-secondary" />
+                </a>
             </div>
 
             {/* Section wipe: Hero → Features */}
@@ -631,7 +681,7 @@ export const Landing: React.FC = () => {
                             </div>
                         </div>
                     </Surface>
-                    
+
                     <Surface>
                         <div className="relative p-7 h-full flex flex-col">
                             <div data-reveal className="flex items-center gap-4">
@@ -680,7 +730,7 @@ export const Landing: React.FC = () => {
                         </div>
                     </Surface>
 
-                     <Surface>
+                    <Surface>
                         <div className="relative p-7 h-full flex flex-col">
                             <div data-reveal className="flex items-center gap-4">
                                 <div data-card-icon className="h-12 w-12 rounded-xl border border-white/10 bg-white/[0.04] flex items-center justify-center text-accent-secondary shadow-[0_0_15px_rgba(124,58,237,0.15)]">
@@ -745,7 +795,7 @@ export const Landing: React.FC = () => {
                                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-4">
                                     {codeTab === 'code' ? (
                                         <pre className="text-[11px] leading-relaxed font-mono text-white/70 overflow-hidden">
-{`<template>
+                                            {`<template>
   <div id="app">
     <div class="loader-wrapper" v-if="loaderHide: show">
       <div class="loader-index">
@@ -789,7 +839,7 @@ export const Landing: React.FC = () => {
                     </div>
                 </div>
             </div>
-            
+
             {/* Pricing Section */}
             <div id="pricing" className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-20 pt-10">
                 <div className="text-center">
@@ -805,7 +855,7 @@ export const Landing: React.FC = () => {
                     <Surface className="p-8 flex flex-col justify-between group hover:bg-white/[0.04] transition-colors" data-reveal>
                         <div>
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-white/5 border border-white/10"><Users size={16} className="text-white/60"/></div>
+                                <div className="p-2 rounded-lg bg-white/5 border border-white/10"><Users size={16} className="text-white/60" /></div>
                                 <div className="text-sm font-medium text-white/80">Rookie Queue</div>
                             </div>
                             <div className="mt-6 flex items-baseline text-4xl font-semibold text-white">
@@ -828,7 +878,7 @@ export const Landing: React.FC = () => {
                         <div className="relative z-10">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-accent-secondary/20 border border-accent-secondary/30"><Code2 size={16} className="text-accent-secondary"/></div>
+                                    <div className="p-2 rounded-lg bg-accent-secondary/20 border border-accent-secondary/30"><Code2 size={16} className="text-accent-secondary" /></div>
                                     <div className="text-sm font-medium text-accent-secondary">Pro Operator</div>
                                 </div>
                                 <Pill className="text-[10px] py-1 bg-accent-secondary/15 border-accent-secondary/30 text-accent-secondary shadow-[0_0_10px_rgba(124,58,237,0.3)]">Most Popular</Pill>
@@ -851,7 +901,7 @@ export const Landing: React.FC = () => {
                     <Surface className="p-8 flex flex-col justify-between group hover:bg-white/[0.04] transition-colors" data-reveal>
                         <div>
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-white/5 border border-white/10"><Server size={16} className="text-white/60"/></div>
+                                <div className="p-2 rounded-lg bg-white/5 border border-white/10"><Server size={16} className="text-white/60" /></div>
                                 <div className="text-sm font-medium text-white/80">Enterprise Sandbox</div>
                             </div>
                             <div className="mt-6 flex items-baseline text-4xl font-semibold text-white">
@@ -883,23 +933,23 @@ export const Landing: React.FC = () => {
                     </h2>
                 </div>
                 <div className="mt-8 space-y-8 max-w-3xl mx-auto" data-reveal>
-                            {[
-                                { date: 'Oct 24', tag: 'Feature', title: 'CodeArena v2.1 Live', desc: 'Introduced PostgreSQL backing for realtime scoreboard analytics. Enjoy lag-free leaderboard computations.' },
-                                { date: 'Oct 12', tag: 'Improvement', title: 'Voice Input Accuracy Boost', desc: 'New NLP tokenizer handles Python indentations and React TSX fragments perfectly out of the box.' },
-                                { date: 'Sep 29', tag: 'Event', title: 'Season 1 Tournament Wrap-Up', desc: 'Check out the top 10 operator loadouts and coding strategies that dominated the finals.' }
-                            ].map(post => (
-                                <div key={post.title} className="group relative flex gap-6 border-l border-white/10 pl-6 hover:border-accent-secondary/70 transition-colors">
-                                    <div className="absolute -left-[5px] top-2 h-2.5 w-2.5 rounded-full border border-white/20 bg-black group-hover:border-accent-secondary group-hover:bg-accent-secondary shadow-[0_0_10px_rgba(124,58,237,0)] group-hover:shadow-[0_0_15px_rgba(124,58,237,0.8)] transition-all" />
-                                    <div className="w-24 shrink-0 mt-0.5 space-y-1.5">
-                                        <div className="text-xs font-medium text-white/50">{post.date}</div>
-                                        <div className="text-[9px] py-0.5 px-1.5 inline-block uppercase tracking-wider text-accent-secondary font-semibold bg-accent-secondary/10 rounded-sm">{post.tag}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-base font-medium text-white/90 cursor-pointer group-hover:text-emerald-400 transition-colors">{post.title}</div>
-                                        <div className="mt-2 text-sm leading-relaxed text-white/50">{post.desc}</div>
-                                    </div>
-                                </div>
-                            ))}
+                    {[
+                        { date: 'Oct 24', tag: 'Feature', title: 'CodeArena v2.1 Live', desc: 'Introduced PostgreSQL backing for realtime scoreboard analytics. Enjoy lag-free leaderboard computations.' },
+                        { date: 'Oct 12', tag: 'Improvement', title: 'Voice Input Accuracy Boost', desc: 'New NLP tokenizer handles Python indentations and React TSX fragments perfectly out of the box.' },
+                        { date: 'Sep 29', tag: 'Event', title: 'Season 1 Tournament Wrap-Up', desc: 'Check out the top 10 operator loadouts and coding strategies that dominated the finals.' }
+                    ].map(post => (
+                        <div key={post.title} className="group relative flex gap-6 border-l border-white/10 pl-6 hover:border-accent-secondary/70 transition-colors">
+                            <div className="absolute -left-[5px] top-2 h-2.5 w-2.5 rounded-full border border-white/20 bg-black group-hover:border-accent-secondary group-hover:bg-accent-secondary shadow-[0_0_10px_rgba(124,58,237,0)] group-hover:shadow-[0_0_15px_rgba(124,58,237,0.8)] transition-all" />
+                            <div className="w-24 shrink-0 mt-0.5 space-y-1.5">
+                                <div className="text-xs font-medium text-white/50">{post.date}</div>
+                                <div className="text-[9px] py-0.5 px-1.5 inline-block uppercase tracking-wider text-accent-secondary font-semibold bg-accent-secondary/10 rounded-sm">{post.tag}</div>
+                            </div>
+                            <div>
+                                <div className="text-base font-medium text-white/90 cursor-pointer group-hover:text-emerald-400 transition-colors">{post.title}</div>
+                                <div className="mt-2 text-sm leading-relaxed text-white/50">{post.desc}</div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -1007,7 +1057,7 @@ export const Landing: React.FC = () => {
                             <button type="submit" className="w-full rounded-xl bg-gradient-to-r from-accent-secondary to-purple-600 px-4 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)] transition-all hover:-translate-y-0.5 mt-2">Route Secure Message</button>
                         </form>
                     </Surface>
-                    
+
                     {/* Support Sidebar */}
                     <div className="w-full md:w-64 shrink-0 flex flex-col gap-6" data-reveal>
                         <Surface className="p-6 flex-1 flex flex-col justify-center items-center text-center group hover:bg-[#5865F2]/5 transition-colors cursor-pointer border-transparent hover:border-[#5865F2]/30">
@@ -1017,7 +1067,7 @@ export const Landing: React.FC = () => {
                             <div className="text-sm font-semibold text-white/90">Community Discord</div>
                             <div className="text-[11px] leading-relaxed text-white/50 mt-2">Join 5,000+ engineers discussing CodeArena & queuing daily.</div>
                         </Surface>
-                        
+
                         <Surface className="p-6 flex-1 flex flex-col justify-center items-center text-center group hover:bg-emerald-500/5 transition-colors cursor-pointer border-transparent hover:border-emerald-500/30">
                             <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4 text-emerald-400 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(52,211,153,0.4)] transition-all">
                                 <BookOpen size={20} />
@@ -1060,27 +1110,9 @@ export const Landing: React.FC = () => {
                         <div className="max-w-sm">
                             <div className="flex items-center gap-3">
                                 <Logo isLight={false} />
-                                <div>
-                                    <div className="text-sm font-medium tracking-tight">CodeArena</div>
-                                    <div className="text-xs text-white/45 leading-relaxed mt-1">
-                                        Dive into the future of competitive coding battles with voice, realtime notes, and live scoring.
-                                    </div>
-                                </div>
+
                             </div>
-                            <div className="mt-5 flex items-center gap-3 text-white/55">
-                                <button className="h-10 w-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors flex items-center justify-center" type="button" aria-label="GitHub">
-                                    <Github className="h-5 w-5" />
-                                </button>
-                                <button className="h-10 w-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors flex items-center justify-center" type="button" aria-label="X">
-                                    <X className="h-5 w-5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="ml-2 h-10 rounded-xl border border-white/10 bg-accent-secondary/20 px-4 text-xs font-medium text-white hover:bg-accent-secondary/30 transition-colors"
-                                >
-                                    Github
-                                </button>
-                            </div>
+
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-10 text-xs">

@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-export const BASE_URL = 'http://127.0.0.1:3001/api';
-export const SOCKET_URL = 'http://127.0.0.1:3001';
+const envApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
+export const BASE_URL = envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
+export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || envApiUrl.replace(/\/api$/, '') || 'http://localhost:3001').replace(/\/+$/, '');
 
 const api = axios.create({
     baseURL: BASE_URL,

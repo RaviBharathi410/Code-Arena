@@ -114,6 +114,7 @@ const isChainCommand = (cmd: string) =>
     ['multi', 'pipeline'].includes(cmd);
 
 const loggedCommands = new Set<string>();
+let isRedisDegraded = false;
 
 export const redis = new Proxy(realRedis, {
     get(target, prop: string | symbol) {
@@ -123,14 +124,14 @@ export const redis = new Proxy(realRedis, {
             return (...args: any[]) => {
                 const cmd = String(prop);
 
-                if (target.status !== 'ready') {
-                    if (env.NODE_ENV === 'production') {
+                if (target.status !== 'ready' || isRedisDegraded) {
+                    if (env.NODE_ENV === 'production' && !isRedisDegraded) {
                         throw new Error(`Redis command '${cmd}' failed: Redis client is not in ready state (${target.status})`);
                     }
 
                     // Log only once per command type to avoid spamming
                     if (!loggedCommands.has(cmd)) {
-                        logger.debug({ cmd }, '[REDIS] Command intercepted — Redis unavailable, returning fallback');
+                        logger.warn({ cmd, degraded: isRedisDegraded }, '[REDIS] Redis unavailable or degraded, returning safe fallback');
                         loggedCommands.add(cmd);
                     }
 
@@ -154,9 +155,25 @@ export const redis = new Proxy(realRedis, {
                 }
 
                 try {
-                    return (originalValue as Function).apply(target, args);
-                } catch (err) {
-                    logger.error({ err, cmd }, '[REDIS] Runtime command error');
+                    const result = (originalValue as Function).apply(target, args);
+                    if (result && typeof result.catch === 'function') {
+                        return result.catch((err: any) => {
+                            if (err?.message?.includes('max requests limit exceeded') || err?.message?.includes('ERR max requests')) {
+                                if (!isRedisDegraded) {
+                                    isRedisDegraded = true;
+                                    logger.warn('[REDIS] Upstash request limit exceeded — seamlessly switching to in-memory resilience mode');
+                                }
+                            } else {
+                                logger.warn({ cmd, err: err?.message }, '[REDIS] Runtime command failed, returning fallback');
+                            }
+                            if (isChainCommand(cmd)) return [[null, 0], [null, 0]];
+                            if (isArrayCommand(cmd)) return [];
+                            return null;
+                        });
+                    }
+                    return result;
+                } catch (err: any) {
+                    logger.error({ err: err?.message, cmd }, '[REDIS] Synchronous command invocation error');
                     return Promise.resolve(null);
                 }
             };
@@ -170,5 +187,5 @@ export const redis = new Proxy(realRedis, {
  * Check if Redis is currently connected and ready for commands.
  */
 export function isRedisReady(): boolean {
-    return realRedis.status === 'ready';
+    return realRedis.status === 'ready' && !isRedisDegraded;
 }

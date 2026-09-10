@@ -1,0 +1,9 @@
+{
+  "id": "python3",
+  "name": "Python 3",
+  "sourceFile": "main.py",
+  "compile": null,
+  "run": ["/usr/bin/python3", "main.py"],
+  "compileTimeoutMs": 0,
+  "runTimeoutMs": 2000
+}

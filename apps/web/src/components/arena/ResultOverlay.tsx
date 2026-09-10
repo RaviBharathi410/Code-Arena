@@ -107,7 +107,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({ result, currentUse
                             <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-gray-500">
                                 <BrainCircuit size={12} className="text-purple-500" /> Complexity
                             </div>
-                            <div className="text-3xl font-black text-white uppercase font-mono">
+                            <div className="text-3xl font-black text-white uppercase">
                                 {isWinner ? result.p1Sub?.timeComplexity : result.p2Sub?.timeComplexity}
                             </div>
                         </div>

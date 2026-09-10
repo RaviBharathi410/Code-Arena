@@ -10,6 +10,7 @@ import { GameSpace } from '../views/GameSpace';
 import { BattleArena } from '../views/BattleArena';
 import { OpponentSelection } from '../views/OpponentSelection';
 import { ProblemsList } from '../views/ProblemsList';
+import { HostedRoomSpace } from '../views/HostedRoomSpace';
 import type { PageId } from './navigationState';
 
 // ── Page Map ──────────────────────────────────────────────────────────────
@@ -30,26 +31,30 @@ const PAGE_MAP: Record<PageId, React.FC<any>> = {
     [PAGES.ARENA_PRACTICE]: GameSpace,
     [PAGES.ARENA_MATCH]: BattleArena,
     [PAGES.PROBLEMS]: ProblemsList,
+    [PAGES.HOSTED_ROOM]: HostedRoomSpace,
 };
 
 // Pages that don't require authentication
 const PUBLIC_PAGES = new Set<PageId>([PAGES.LANDING, PAGES.LOGIN]);
 
 // Pages that render outside MainLayout
-const NO_LAYOUT_PAGES = new Set<PageId>([PAGES.LANDING, PAGES.LOGIN]);
+const NO_LAYOUT_PAGES = new Set<PageId>([PAGES.LANDING, PAGES.LOGIN, PAGES.HOSTED_ROOM]);
 
 // ── NavigatorRoot ─────────────────────────────────────────────────────────
 
 const NavigatorRoot: React.FC = () => {
     const { currentPage, params } = useNav();
-    const { isAuthenticated, user, fetchProfile, authLoading } = useAuthStore();
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+    const user = useAuthStore((state) => state.user);
+    const fetchProfile = useAuthStore((state) => state.fetchProfile);
+    const authLoading = useAuthStore((state) => state.authLoading);
 
-    // Verify session on initial load
+    // Verify session once on initial load
     React.useEffect(() => {
         fetchProfile();
-    }, [fetchProfile]);
+    }, []);
 
-    if (authLoading) {
+    if (authLoading && !user) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[#050507]">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
@@ -71,7 +76,7 @@ const NavigatorRoot: React.FC = () => {
 
     // Render with or without layout
     if (NO_LAYOUT_PAGES.has(currentPage)) {
-        return <PageComponent />;
+        return <PageComponent currentUser={user} {...params} />;
     }
 
     return (

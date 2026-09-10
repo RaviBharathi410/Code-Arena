@@ -1,8 +1,36 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User } from '../types';
 import api from '../lib/api';
 import SafeSessionStorage from '../lib/storage';
+
+// Multi-tab storage engine:
+// Isolates active user session per-tab in sessionStorage so two browser tabs can be
+// logged in as two DIFFERENT users simultaneously, while falling back to localStorage
+// for initial hydration of new tabs.
+const multiTabStorage = {
+    getItem: (name: string): string | null => {
+        try {
+            const sVal = sessionStorage.getItem(name);
+            if (sVal) return sVal;
+            return localStorage.getItem(name);
+        } catch {
+            return null;
+        }
+    },
+    setItem: (name: string, value: string): void => {
+        try {
+            sessionStorage.setItem(name, value);
+            localStorage.setItem(name, value);
+        } catch {}
+    },
+    removeItem: (name: string): void => {
+        try {
+            sessionStorage.removeItem(name);
+            localStorage.removeItem(name);
+        } catch {}
+    }
+};
 
 interface AuthState {
     user: User | null;
@@ -12,6 +40,8 @@ interface AuthState {
     authError: string | null;
 
     setAuth: (user: User, accessToken: string) => void;
+    loginWithGoogle: (credential: string) => Promise<void>;
+    loginAsDemo: () => Promise<void>;
     logout: () => Promise<void>;
     fetchProfile: () => Promise<void>;
     updateRating: (newRating: number, change: number) => void;
@@ -34,6 +64,45 @@ export const useAuthStore = create<AuthState>()(
                 authLoading: false,
                 authError: null,
             }),
+
+            loginWithGoogle: async (credential: string) => {
+                set({ authLoading: true, authError: null });
+                try {
+                    const response = await api.post('/auth/google', { credential });
+                    const { accessToken, user } = response.data;
+                    set({
+                        user: { ...user },
+                        token: accessToken,
+                        isAuthenticated: true,
+                        authLoading: false,
+                        authError: null,
+                    });
+                } catch (error: any) {
+                    const message = error?.response?.data?.message || error?.message || 'Google authentication failed';
+                    set({ authError: message, authLoading: false });
+                    throw new Error(message);
+                }
+            },
+
+            loginAsDemo: async () => {
+                set({ authLoading: true, authError: null });
+                try {
+                    const response = await api.post('/auth/demo');
+                    const { accessToken, user } = response.data;
+                    set({
+                        user: { ...user },
+                        token: accessToken,
+                        isAuthenticated: true,
+                        authLoading: false,
+                        authError: null,
+                    });
+                } catch (error: any) {
+                    const message = error?.response?.data?.message || error?.message || 'Failed to initialize demo session';
+                    set({ authError: message, authLoading: false });
+                    throw new Error(message);
+                }
+            },
+
 
             logout: async () => {
                 try {
@@ -64,10 +133,19 @@ export const useAuthStore = create<AuthState>()(
                     return;
                 }
 
-                set({ authLoading: true, authError: null });
+                // If no user or not yet authenticated, show loading indicator; otherwise sync silently
+                if (!get().isAuthenticated || !get().user) {
+                    set({ authLoading: true, authError: null });
+                }
+
                 try {
                     const response = await api.get('/auth/me');
-                    set({ user: response.data, authLoading: false });
+                    set({ 
+                        user: response.data, 
+                        isAuthenticated: true, 
+                        authLoading: false, 
+                        authError: null 
+                    });
                 } catch (error: any) {
                     const message = error?.response?.data?.message || error?.message || 'Failed to fetch profile';
                     if (error?.response?.status === 401) {
@@ -94,7 +172,21 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'arena-auth-storage',
+            storage: createJSONStorage(() => multiTabStorage),
             version: 2,
+            partialize: (state) => ({
+                user: state.user,
+                token: state.token,
+                isAuthenticated: state.isAuthenticated,
+            }),
+            onRehydrateStorage: () => (state) => {
+                if (state) {
+                    state.authLoading = false;
+                    if (state.token && state.user) {
+                        state.isAuthenticated = true;
+                    }
+                }
+            },
             migrate: (persistedState: any, version: number) => {
                 if (version < 2) {
                     console.log('[AUTH] Migrated to JWT Auth V2: Invalidating stale local sessions.');

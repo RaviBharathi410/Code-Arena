@@ -42,13 +42,13 @@ export const ProblemsList: React.FC = () => {
                 }
                 const res = await api.get(`/problems?${query.toString()}`);
                 const newData = res.data.data || [];
-                
+
                 if (page === 0) {
                     setProblems(newData);
                 } else {
                     setProblems(prev => [...prev, ...newData]);
                 }
-                
+
                 setHasMore(newData.length === LIMIT);
             } catch (err) {
                 console.error('Failed to fetch problems', err);
@@ -89,7 +89,7 @@ export const ProblemsList: React.FC = () => {
 
     useEffect(() => {
         if (!loading && problems.length > 0) {
-            gsap.fromTo('.problem-card', 
+            gsap.fromTo('.problem-card',
                 { opacity: 0, y: 20 },
                 { opacity: 1, y: 0, duration: 0.5, stagger: 0.05, ease: 'power2.out' }
             );
@@ -116,19 +116,19 @@ export const ProblemsList: React.FC = () => {
             </div>
 
             <div className="flex-1 flex flex-col px-6 md:px-12 py-8 lg:py-12 relative z-10 overflow-hidden">
-                
+
                 <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div className="space-y-4">
                         <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-sm ${isLight ? 'border-black/5 bg-black/5' : 'border-white/10 bg-white/5'}`}>
                             <Cpu size={14} className="text-accent-secondary" />
                             <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>Tactical Armory // V2.9</span>
                         </div>
-                        <h1 className="text-5xl md:text-6xl font-black tracking-tighter uppercase leading-none">
+                        <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase leading-none">
                             Problem <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary to-accent-secondary">Arsenal</span>
                         </h1>
                     </div>
-                    <div className="absolute top-8 lg:top-12 right-6 md:right-12">
-                        <NeonButton onClick={() => goToDashboard()} variant="secondary" className={`px-8 font-black tracking-[0.2em] uppercase text-[10px] ${isLight ? 'bg-black text-white border-black' : ''}`}>
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <NeonButton onClick={() => goToDashboard()} variant="secondary" className={`px-6 sm:px-8 font-black tracking-[0.2em] uppercase text-[10px] ${isLight ? 'bg-black text-white border-black' : ''}`}>
                             <ArrowLeft size={14} /> Back to Hub
                         </NeonButton>
                     </div>
@@ -148,21 +148,19 @@ export const ProblemsList: React.FC = () => {
                     </div>
 
                     {/* Difficulty Filters & Random Selection */}
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className={`flex p-1 border rounded-2xl backdrop-blur-md ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/10'}`}>
-                            {['all', 'easy', 'medium', 'hard', 'extreme'].map(diff => (
+                    <div className="flex flex-col md:flex-row gap-4 pb-2 md:pb-0">
+                        <div className={`flex p-1 border rounded-2xl backdrop-blur-md shrink-0 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/10'}`}>
+                            {['all', 'easy', 'medium', 'hard'].map(diff => (
                                 <button
                                     key={diff}
                                     onClick={() => { setDifficultyFilter(diff); setPage(0); }}
-                                    className={`px-6 py-3 rounded-xl uppercase text-[10px] font-black tracking-[0.2em] transition-all ${difficultyFilter === diff
-                                        ? (isLight ? 'bg-black text-white shadow-xl' : 'bg-white text-black shadow-lg')
-                                        : (isLight ? 'text-gray-400 hover:bg-black/5' : 'text-gray-500 hover:bg-white/5')
-                                        } ${
-                                            diff === 'easy' ? 'hover:text-green-500' :
+                                    className={`px-4 sm:px-6 py-3 rounded-xl uppercase text-[10px] font-black tracking-[0.2em] transition-all whitespace-nowrap ${difficultyFilter === diff
+                                        ? (isLight ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-black shadow-lg')
+                                        : (isLight ? 'text-slate-700 hover:text-purple-700 font-bold hover:bg-slate-200' : 'text-gray-500 hover:bg-white/5')
+                                        } ${diff === 'easy' ? 'hover:text-green-500' :
                                             diff === 'medium' ? 'hover:text-amber-500' :
-                                            diff === 'hard' ? 'hover:text-red-500' :
-                                            diff === 'extreme' ? 'hover:text-fuchsia-400' :
-                                            'hover:text-accent-secondary'
+                                                diff === 'hard' ? 'hover:text-red-500' :
+                                                    'hover:text-purple-700'
                                         }`}
                                 >
                                     {diff}
@@ -174,16 +172,21 @@ export const ProblemsList: React.FC = () => {
                                 try {
                                     const diffQuery = difficultyFilter !== 'all' ? `?difficulty=${difficultyFilter}` : '';
                                     const res = await api.get(`/problems/random${diffQuery}`);
-                                    if (res.data && res.data.id) {
-                                        goToArenaPractice(res.data.id);
+                                    const problemData = res.data?.data || res.data;
+                                    const targetId = problemData?.id || problemData?._id;
+                                    if (targetId) {
+                                        goToArenaPractice(targetId.toString());
                                     }
                                 } catch (err) {
                                     console.error('Failed to fetch random problem', err);
                                 }
                             }}
-                            className={`px-6 py-3 rounded-2xl border text-accent-secondary hover:scale-105 uppercase text-[10px] font-black tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${isLight ? 'bg-white border-accent-secondary/50 hover:bg-accent-secondary hover:text-white shadow-lg' : 'bg-accent-secondary/10 border-accent-secondary/20 hover:bg-accent-secondary hover:text-black'}`}
+                            className={`px-6 py-3 rounded-2xl border hover:scale-105 uppercase text-[10px] font-black tracking-[0.2em] transition-all flex items-center justify-center gap-2 shadow-lg ${isLight
+                                ? 'bg-purple-600 hover:bg-purple-700 border-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.3)]'
+                                : 'bg-gradient-to-r from-purple-600/30 to-violet-600/30 border-purple-500/50 text-purple-300 hover:bg-purple-600 hover:text-white shadow-[0_0_20px_rgba(124,58,237,0.2)]'
+                                }`}
                         >
-                            <Zap size={14} /> Random Selection
+                            <Zap size={12} fill="currentColor" /> Random Problem
                         </button>
                     </div>
                 </div>
@@ -206,51 +209,53 @@ export const ProblemsList: React.FC = () => {
                             {displayProblems.map((prob: any) => {
                                 const displayId = (prob.id || prob._id || '').toString();
                                 return (
-                                <GlassCard key={displayId} className={`problem-card group hover:border-accent-secondary/50 transition-all p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#12121a] border-white/10 hover:bg-[#1a1a24] hover:border-white/40 shadow-xl'}`}>
-                                    <div className="flex-1 flex flex-col md:flex-row items-center gap-8 relative z-10 w-full">
-                                        <div className="flex flex-col items-center md:items-start min-w-[200px]">
-                                            <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border mb-3 ${
-                                                prob.difficulty?.toLowerCase() === 'easy' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                                prob.difficulty?.toLowerCase() === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                                                prob.difficulty?.toLowerCase() === 'hard' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                                'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
-                                            }`}>
-                                                {prob.difficulty}
-                                            </span>
-                                            <h3 className={`text-xl font-black uppercase tracking-tighter group-hover:text-accent-secondary transition-colors line-clamp-1 ${isLight ? 'text-black' : 'text-white'}`}>
-                                                {prob.title}
-                                            </h3>
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">MODULE ID: {displayId.slice(0, 8)}</p>
-                                        </div>
-                                        
-                                        <div className="flex-1 hidden lg:block">
-                                            <p className={`text-sm font-light leading-relaxed line-clamp-2 ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
-                                                {prob.description}
-                                            </p>
-                                        </div>
-                                    </div>
+                                    <GlassCard key={displayId} className={`problem-card group hover:border-accent-secondary/50 transition-all p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#12121a] border-white/10 hover:bg-[#1a1a24] hover:border-white/40 shadow-xl'}`}>
+                                        <div className="flex-1 flex flex-col md:flex-row items-center gap-8 relative z-10 w-full">
+                                            <div className="flex flex-col items-center md:items-start min-w-[200px]">
+                                                <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border mb-3 ${prob.difficulty?.toLowerCase() === 'easy' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
+                                                    prob.difficulty?.toLowerCase() === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                                        prob.difficulty?.toLowerCase() === 'hard' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                                            'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
+                                                    }`}>
+                                                    {prob.difficulty}
+                                                </span>
+                                                <h3 className={`text-xl font-black uppercase tracking-tighter group-hover:text-accent-secondary transition-colors line-clamp-1 ${isLight ? 'text-black' : 'text-white'}`}>
+                                                    {prob.title}
+                                                </h3>
+                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">MODULE ID: {displayId.slice(0, 8)}</p>
+                                            </div>
 
-                                    <div className="relative z-10 flex flex-row gap-3 w-full md:w-auto">
-                                        <button
-                                            onClick={() => goToArenaPractice(displayId)}
-                                            className={`flex-1 md:w-48 py-3 rounded-xl border text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-95 ${isLight ? 'bg-black text-white border-black hover:bg-accent-secondary hover:border-accent-secondary' : 'bg-white/5 border-white/10 text-white hover:bg-white hover:text-black hover:border-white'}`}
-                                        >
-                                            <Cpu size={14} /> Practice
-                                        </button>
-                                        <button
-                                            onClick={() => goToOpponents(displayId)}
-                                            className={`flex-1 md:w-48 py-3 rounded-xl border text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-95 ${isLight ? 'bg-accent-secondary/10 border-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary hover:text-black' : 'bg-accent-secondary/10 border-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary hover:text-black'}`}
-                                        >
-                                            <Sword size={14} /> Challenge
-                                        </button>
-                                    </div>
+                                            <div className="flex-1 hidden lg:block">
+                                                <p className={`text-sm font-light leading-relaxed line-clamp-2 ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
+                                                    {prob.description}
+                                                </p>
+                                            </div>
+                                        </div>
 
-                                    {/* Subtle background glow */}
-                                    <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-accent-secondary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </GlassCard>
+                                        <div className="relative z-10 flex flex-row gap-3 w-full md:w-auto">
+                                            <button
+                                                onClick={() => goToArenaPractice(displayId)}
+                                                className={`flex-1 md:w-40 py-3 rounded-xl border text-[10px] font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-2 active:scale-95 ${isLight
+                                                    ? 'bg-black/5 border-black/10 text-black hover:bg-black/10'
+                                                    : 'bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20'
+                                                    }`}
+                                            >
+                                                <Cpu size={14} className="text-cyan-400" /> Practice
+                                            </button>
+                                            <button
+                                                onClick={() => goToOpponents(displayId)}
+                                                className="flex-1 md:w-44 py-3 rounded-xl border text-[10px] font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-2 active:scale-95 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white border-purple-500/40 shadow-lg shadow-purple-600/25 hover:shadow-purple-600/45 hover:scale-[1.02]"
+                                            >
+                                                <Sword size={14} className="text-purple-200" /> Challenge
+                                            </button>
+                                        </div>
+
+                                        {/* Subtle background glow */}
+                                        <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-accent-secondary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </GlassCard>
                                 );
                             })}
-                            
+
                             {/* Infinite Scroll Trigger */}
                             {hasMore && (
                                 <div id="scroll-trigger" className="col-span-full py-12 flex justify-center">

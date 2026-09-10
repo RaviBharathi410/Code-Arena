@@ -8,94 +8,13 @@ import { createBullMQRedisClient } from '../lib/redis';
 import { scoringEngine } from '../lib/scoring';
 import { matchesService } from '../modules/matches/matches.service';
 import { analyticsQueue } from './analytics.queue';
-
-// Enforce strict startup constraints for Judge0 in production
-const isProduction = env.NODE_ENV === 'production';
-const hasValidKey = env.JUDGE0_API_KEY && env.JUDGE0_API_KEY !== 'your_judge0_key';
-
-if (isProduction && !hasValidKey) {
-    throw new Error('FATAL: env variable JUDGE0_API_KEY is missing or contains the placeholder value in production mode. uplink cannot deploy safely.');
-}
-
-function encodeB64(str: string): string {
-    return Buffer.from(str || '').toString('base64');
-}
-
-function decodeB64(str: string | null | undefined): string {
-    if (!str) return '';
-    return Buffer.from(str, 'base64').toString('utf8');
-}
-
-async function runTestCase(code: string, languageId: number, stdin: string, expectedOutput: string) {
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-    };
-    if (env.JUDGE0_API_KEY && env.JUDGE0_API_KEY !== 'your_judge0_key') {
-        headers['X-RapidAPI-Key'] = env.JUDGE0_API_KEY;
-    }
-
-    const payload = {
-        source_code: encodeB64(code),
-        language_id: languageId,
-        stdin: encodeB64(stdin),
-        expected_output: encodeB64(expectedOutput),
-    };
-
-    const res = await fetch(`${env.JUDGE0_API_URL}/submissions?base64_encoded=true`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-        throw new Error(`Judge0 API POST failed: ${res.statusText} (${res.status})`);
-    }
-
-    const data = await res.json();
-    const token = data.token;
-    if (!token) {
-        throw new Error('Judge0 did not return a submission token');
-    }
-
-    const maxPollAttempts = 20; // 20 * 500ms = 10s
-    for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const pollRes = await fetch(`${env.JUDGE0_API_URL}/submissions/${token}?base64_encoded=true`, {
-            headers,
-        });
-
-        if (!pollRes.ok) {
-            throw new Error(`Judge0 API poll failed: ${pollRes.statusText} (${pollRes.status})`);
-        }
-
-        const runResult = await pollRes.json();
-        const statusId = runResult.status?.id;
-
-        if (statusId !== 1 && statusId !== 2) {
-            return {
-                status: {
-                    id: statusId,
-                    description: runResult.status?.description,
-                },
-                time: runResult.time,
-                memory: runResult.memory,
-                stdout: decodeB64(runResult.stdout),
-                stderr: decodeB64(runResult.stderr),
-                compile_output: decodeB64(runResult.compile_output),
-            };
-        }
-    }
-
-    const error: any = new Error('Code execution timed out (Judge0 polling exceeded 10s)');
-    error.status = 408;
-    throw error;
-}
+import { executionEngineClient } from '../lib/execution/ExecutionEngineClient';
+import { functionDriver } from '../lib/execution/FunctionDriver';
 
 export interface CodeExecutionJobData {
     submissionId: string;
     code: string;
-    languageId: number;
+    languageId: string | number;
     problemId: string;
     matchId: string;
     userId: string;
@@ -124,59 +43,287 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
     async (job: Job<CodeExecutionJobData>) => {
         const { submissionId, code, languageId, matchId, userId, testCases, mode, matchStartedAt } = job.data;
         logger.info({ submissionId, matchId, userId, mode, testCount: testCases.length }, '[WORKER] Starting execution');
+        let hasEmittedResult = false;
 
+        let passedCount = 0;
+        let maxTime = 0;
+        let maxMemory = 0;
+        let testResults: any[] = [];
+        let finalStatus = 'INTERNAL_ERROR';
+        let detectedComplexity = 'O(n)';
+        let qualityScore = 50;
+
+        // ── Phase 1: Core Execution & Verdict Emission ──
         try {
             if (mode === 'submit') {
-                await Submission.updateOne({ _id: submissionId }, { $set: { status: 'PROCESSING' } });
+                await Submission.updateOne({ _id: submissionId }, { $set: { status: 'PROCESSING' } }).catch(() => { });
             }
 
             const isMock = env.USE_JUDGE0_MOCK;
             if (isMock) {
-                logger.warn('⚠️⚠️⚠️ WARNING: USE_JUDGE0_MOCK IS ACTIVE. USING SIMULATED EXECUTION. THIS MUST NOT BE USED IN PRODUCTION. ⚠️⚠️⚠️');
+                logger.warn('⚠️ USE_JUDGE0_MOCK IS ACTIVE. SIMULATED EXECUTION.');
             }
 
-            const judgeSubmissions = testCases.map((tc) => ({
-                source_code: code,
-                language_id: languageId,
-                stdin: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
-                expected_output: typeof tc.output === 'string' ? tc.output
-                    : typeof tc.expected_output === 'string' ? tc.expected_output
-                    : JSON.stringify(tc.output ?? tc.expected_output),
-            }));
+            logger.info({
+                submissionId,
+                languageId,
+                mode,
+                codeSnippet: code.slice(0, 100),
+                testCaseCount: testCases.length,
+                testCaseSample: testCases[0]
+            }, '[TRACE Step 1] Execution request payload received by worker');
 
-            const results = await Promise.all(judgeSubmissions.map(async (sub) => {
-                if (isMock) {
-                    await new Promise(r => setTimeout(r, Math.random() * 300 + 200));
-                    return { status: { id: 3, description: 'Accepted' }, time: '0.04', memory: 2048, stdout: sub.expected_output };
+            if (!Array.isArray(testCases) || testCases.length === 0) {
+                throw new Error('[BAD_TESTCASES] Invalid or empty test cases payload provided to worker');
+            }
+
+            const problemDoc = await Problem.findById(job.data.problemId).lean();
+
+            function normalizeOutput(val: string): string {
+                return (val || '')
+                    .replace(/\r\n/g, '\n')
+                    .replace(/\r/g, '\n')
+                    .split('\n')
+                    .map(l => l.trimEnd())
+                    .join('\n')
+                    .trim();
+            }
+
+            // Map numeric Judge0 IDs or string language IDs to ExecutionEngine language key
+            let engineLang = typeof languageId === 'string' ? languageId : 'cpp17';
+            if (typeof languageId === 'number') {
+                const numericMap: Record<number, string> = { 54: 'cpp17', 71: 'python3', 62: 'java', 63: 'javascript' };
+                engineLang = numericMap[languageId] || 'cpp17';
+            }
+
+            testResults = [];
+            for (let i = 0; i < testCases.length; i++) {
+                const tc = testCases[i];
+                const inputVal = tc?.input !== undefined ? tc.input : tc?.stdin;
+                const expectedVal = tc?.expected !== undefined ? tc.expected : (tc?.output !== undefined ? tc.output : tc?.expected_output);
+
+                const toStdinString = (value: any): string => {
+                    if (typeof value !== 'string') {
+                        return Array.isArray(value)
+                            ? value.map(String).join('\n')
+                            : String(value ?? '');
+                    }
+
+                    try {
+                        const parsed = JSON.parse(value);
+
+                        if (Array.isArray(parsed)) {
+                            return parsed.map(String).join('\n');
+                        }
+
+                        return value;
+                    } catch {
+                        return value;
+                    }
+                };
+
+                const toExpectedString = (value: any): string => {
+                    if (typeof value !== 'string') {
+                        return Array.isArray(value)
+                            ? value.map(String).join('\n')
+                            : String(value ?? '');
+                    }
+
+                    try {
+                        const parsed = JSON.parse(value);
+
+                        if (Array.isArray(parsed)) {
+                            return parsed.map(String).join('\n');
+                        }
+
+                        return value;
+                    } catch {
+                        return value;
+                    }
+                };
+
+                const isFunctionProblem = problemDoc?.problemType === 'function' || (!problemDoc?.problemType && (problemDoc?.functionName || problemDoc?.boilerplate));
+
+                const stdinStr = isFunctionProblem
+                    ? (typeof inputVal === 'string'
+                        ? inputVal
+                        : JSON.stringify(inputVal ?? ''))
+                    : toStdinString(inputVal);
+
+                const expectedStr = isFunctionProblem
+                    ? (typeof expectedVal === 'string'
+                        ? expectedVal
+                        : JSON.stringify(expectedVal ?? ''))
+                    : toExpectedString(expectedVal);
+
+                let sourceToRun = code;
+                let stdinToRun = stdinStr;
+
+                if (isFunctionProblem) {
+                    const generated = functionDriver.generate({
+                        problem: {
+                            problemType: 'function',
+                            functionName: problemDoc?.functionName,
+                            returnType: problemDoc?.returnType,
+                            parameters: problemDoc?.parameters,
+                        },
+                        userCode: code,
+                        testCaseInput: stdinStr,
+                        language: engineLang,
+                    });
+                    sourceToRun = generated.sourceCode;
+                    stdinToRun = '';
                 }
-                return runTestCase(code, languageId, sub.stdin, sub.expected_output);
-            }));
 
-            // Aggregate results
-            let passedCount = 0;
-            let maxTime = 0;
-            let maxMemory = 0;
-            const testResults = results.map((res: any, i) => {
-                const passed = res.status?.id === 3;
+                const execResult = await executionEngineClient.execute({
+                    languageId: engineLang,
+                    sourceCode: sourceToRun,
+                    stdin: stdinToRun,
+                    timeLimitMs: 2000,
+                    memoryLimitMb: 256,
+                });
+
+                let status = execResult.status;
+                let passed = false;
+
+                if (execResult.status === 'ACCEPTED') {
+                    if (expectedVal === null) {
+                        // Custom manual testcase with no strict expected output
+                        passed = true;
+                    } else {
+                        const normActual = normalizeOutput(execResult.stdout);
+                        const normExpected = normalizeOutput(expectedStr);
+                        passed = normActual === normExpected;
+                        if (!passed) {
+                            try {
+                                const jsonActual = JSON.parse(normActual);
+                                const jsonExpected = JSON.parse(normExpected);
+                                passed = JSON.stringify(jsonActual) === JSON.stringify(jsonExpected);
+                            } catch {
+                                const compactActual = normActual.replace(/\s+/g, '');
+                                const compactExpected = normExpected.replace(/\s+/g, '');
+                                passed = compactActual === compactExpected;
+                            }
+                        }
+                        if (!passed) {
+                            status = 'WRONG_ANSWER';
+                        }
+                    }
+                }
+
                 if (passed) passedCount++;
-                if (res.time) maxTime = Math.max(maxTime, parseFloat(res.time) || 0);
-                if (res.memory) maxMemory = Math.max(maxMemory, res.memory || 0);
-                return { testCaseIndex: i, status: res.status?.description, passed, stdout: res.stdout, stderr: res.stderr, compile_output: res.compile_output, time: res.time, memory: res.memory };
-            });
+                maxTime = Math.max(maxTime, (execResult.timeMs || 0) / 1000);
+                maxMemory = Math.max(maxMemory, execResult.memoryKb || 0);
+
+                const actualOutput = execResult.stdout !== undefined && execResult.stdout !== null
+                    ? execResult.stdout.trim()
+                    : '';
+
+                testResults.push({
+                    testCaseIndex: i,
+                    status,
+                    passed,
+                    input: stdinStr,
+                    expected: expectedStr,
+                    actual: actualOutput,
+                    stdout: execResult.stdout,
+                    stderr: execResult.stderr,
+                    compile_output: execResult.stderr,
+                    time: (execResult.timeMs / 1000).toFixed(3),
+                    memory: execResult.memoryKb,
+                });
+
+                // Fail fast on compilation error or internal error for remaining cases
+                if (execResult.status === 'COMPILATION_ERROR' || execResult.status === 'INTERNAL_ERROR') {
+                    break;
+                }
+            }
 
             const allPassed = passedCount === testCases.length;
-            const finalStatus = allPassed ? 'ACCEPTED' : (testResults.find(r => !r.passed)?.status?.toUpperCase() || 'WRONG_ANSWER');
+            finalStatus = allPassed ? 'ACCEPTED' : (testResults.find(r => !r.passed)?.status?.toUpperCase() || 'WRONG_ANSWER');
 
-            // Complexity & quality analysis
-            const detectedComplexity = scoringEngine.detectComplexity(maxTime * 1000, 1000);
-            const qualityScore = scoringEngine.analyzeCodeQuality(code);
+            logger.info({
+                passedCount,
+                testCasesTotal: testCases.length,
+                finalStatus,
+                sampleMappedResult: testResults[0]
+            }, '[TRACE Step 4] Worker processed Judge0 result into final verdict');
 
-            const timeToSolveMs = matchStartedAt
-                ? Date.now() - new Date(matchStartedAt).getTime()
-                : undefined;
+            // Safe complexity & quality score calculations
+            try {
+                detectedComplexity = scoringEngine.detectComplexity(maxTime * 1000, 1000);
+            } catch (err: any) {
+                logger.warn({ error: err?.message }, '[WORKER] Complexity detection fallback used');
+            }
+
+            try {
+                qualityScore = scoringEngine.analyzeCodeQuality(code);
+            } catch (err: any) {
+                logger.warn({ error: err?.message }, '[WORKER] Quality score analysis fallback used');
+            }
+
+            // Emit result to client IMMEDIATELY
+            if (socketIOInstance) {
+                const event = mode === 'submit' ? 'battle:submission_result' : 'battle:run_result';
+                const room = socketIOInstance.sockets.adapter.rooms.get(matchId);
+                logger.info({
+                    matchId,
+                    event,
+                    roomSize: room?.size ?? 0,
+                    payload: {
+                        userId,
+                        submissionId,
+                        status: finalStatus,
+                        testCasesPass: passedCount,
+                        testCasesTotal: testCases.length
+                    }
+                }, '[TRACE Step 5] Socket.IO emitting verdict event to match room');
+
+                socketIOInstance.to(matchId).emit(event, {
+                    userId,
+                    submissionId,
+                    status: finalStatus,
+                    testCasesPass: passedCount,
+                    testCasesTotal: testCases.length,
+                    results: testResults,
+                    timeMs: Math.round(maxTime * 1000),
+                    memoryKb: maxMemory,
+                    timeComplexity: detectedComplexity,
+                    qualityScore,
+                });
+                hasEmittedResult = true;
+
+                if (mode === 'submit' && allPassed) {
+                    socketIOInstance.to(matchId).emit('battle:opponent_done', {
+                        userId, status: 'ACCEPTED', testCasesPass: passedCount, timeMs: Math.round(maxTime * 1000)
+                    });
+                }
+            }
+        } catch (err: any) {
+            logger.error({
+                message: err.message,
+                stack: err.stack,
+                error: err
+            }, "[WORKER] Code execution phase failed");
 
             if (mode === 'submit') {
+                await Submission.updateOne({ _id: submissionId }, { $set: { status: 'ERROR' } }).catch(() => { });
+            }
+            if (socketIOInstance && !hasEmittedResult) {
+                const event = mode === 'submit' ? 'battle:submission_result' : 'battle:run_result';
+                const clientMessage = env.NODE_ENV === 'production'
+                    ? 'Code execution failed due to an internal judge system error.'
+                    : err.message;
+                socketIOInstance.to(matchId).emit(event, { userId, submissionId, status: 'INTERNAL_ERROR', error: clientMessage });
+            }
+            return;
+        }
+
+        // ── Phase 2: Isolated Post-Processing & Persistence (Non-blocking) ──
+        if (mode === 'submit') {
+            try {
                 const problem = await Problem.findById(job.data.problemId).lean();
+                const timeToSolveMs = matchStartedAt ? Date.now() - new Date(matchStartedAt).getTime() : undefined;
 
                 const finalScore = scoringEngine.calculateScore({
                     status: finalStatus,
@@ -202,18 +349,18 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
                     }
                 });
 
-                // Trigger analytics skill update
+                // Trigger analytics update
                 await analyticsQueue.add('update-skills', {
                     userId,
                     matchId,
                     problemDifficulty: problem?.difficulty || 'easy',
                     result: finalStatus === 'ACCEPTED' ? 'win' : 'loss',
                     executionTime: Math.round(maxTime * 1000),
-                    languageId,
-                });
+                    languageId: typeof languageId === 'number' ? languageId : (parseInt(String(languageId), 10) || 0),
+                }).catch((err) => logger.error({ error: err.message }, '[WORKER] Analytics queue error'));
 
-                // Mark player done; check if both finished
-                if (allPassed) {
+                // Mark player done & calculate match state
+                if (passedCount === testCases.length) {
                     const room = await MatchRoom.findById(matchId).lean();
                     if (room) {
                         const isP1 = room.player1Id?.toString() === userId;
@@ -232,44 +379,12 @@ export const codeExecutionWorker = new Worker<CodeExecutionJobData>(
                         }
                     }
                 }
+            } catch (postProcessingErr: any) {
+                logger.error({
+                    message: postProcessingErr.message,
+                    stack: postProcessingErr.stack
+                }, '[WORKER] Non-fatal post-processing error (Verdict already emitted)');
             }
-
-            // Emit result to client
-            if (socketIOInstance) {
-                const event = mode === 'submit' ? 'battle:submission_result' : 'battle:run_result';
-                const room = socketIOInstance.sockets.adapter.rooms.get(matchId);
-                logger.info({ matchId, event, roomSize: room?.size ?? 0 }, '[WORKER] Emitting result');
-
-                socketIOInstance.to(matchId).emit(event, {
-                    userId,
-                    submissionId,
-                    status: finalStatus,
-                    testCasesPass: passedCount,
-                    testCasesTotal: testCases.length,
-                    results: testResults,
-                    timeMs: Math.round(maxTime * 1000),
-                    memoryKb: maxMemory,
-                    timeComplexity: detectedComplexity,
-                    qualityScore,
-                });
-
-                if (mode === 'submit' && allPassed) {
-                    socketIOInstance.to(matchId).emit('battle:opponent_done', {
-                        userId, status: 'ACCEPTED', testCasesPass: passedCount, timeMs: Math.round(maxTime * 1000)
-                    });
-                }
-            }
-
-        } catch (err: any) {
-            logger.error({ err: err.message, submissionId, matchId, mode }, '[WORKER] Execution failed');
-            if (mode === 'submit') {
-                await Submission.updateOne({ _id: submissionId }, { $set: { status: 'ERROR' } }).catch(() => {});
-            }
-            if (socketIOInstance) {
-                const event = mode === 'submit' ? 'battle:submission_result' : 'battle:run_result';
-                socketIOInstance.to(matchId).emit(event, { userId, submissionId, status: 'INTERNAL_ERROR', error: err.message });
-            }
-            throw err;
         }
     },
     { connection: createBullMQRedisClient(), concurrency: 10 }
