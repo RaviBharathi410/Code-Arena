@@ -11,9 +11,9 @@ import { connectDB } from './config/db';
 console.log("===== SERVER.TS LOADED =====");
 const startServer = async () => {
     logger.info('[MongoDB] Connecting...');
-    console.log("===== BEFORE connectDB =====");
+ 
     await connectDB();
-    console.log("===== AFTER connectDB =====");
+
     logger.info('[MongoDB] Database ready.');
 
     const app = createApp();

@@ -18,6 +18,7 @@ export interface IParticipant {
     lastSubmittedAt?: Date;
     finishedAt?: Date;
     totalScore: number;
+    toObject?: () => any;
 }
 
 export interface IRoomProblem {
@@ -96,13 +97,13 @@ const roomProblemSchema = new Schema<IRoomProblem>({
     category: { type: String, default: 'Algorithms' },
     description: { type: String, required: true },
     constraints: { type: String, default: '' },
-    examples: { type: [Schema.Types.Mixed], default: [] },
-    testCases: { type: [Schema.Types.Mixed], default: [] },
+    examples: { type: [Schema.Types.Mixed] as any, default: [] },
+    testCases: { type: [Schema.Types.Mixed] as any, default: [] },
     boilerplate: { type: Schema.Types.Mixed, default: () => ({}) },
     problemType: { type: String, enum: ['function', 'stdin-stdout'], default: 'function' },
     functionName: { type: String },
     returnType: { type: String },
-    parameters: { type: [Schema.Types.Mixed], default: [] },
+    parameters: { type: [Schema.Types.Mixed] as any, default: [] },
     driverTemplates: { type: Schema.Types.Mixed },
     isCustom: { type: Boolean, default: false },
 }, { _id: false });

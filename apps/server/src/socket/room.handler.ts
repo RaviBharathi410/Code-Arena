@@ -52,8 +52,8 @@ export class RoomHandler {
 
             // Broadcast new participant arrival to all sockets in room
             const joinedParticipant = room.participants.find(p => p.userId.toString() === socket.user!.id);
-            const plainParticipants = room.participants.map(p => (p.toObject ? p.toObject() : p));
-            const plainJoined = joinedParticipant ? (joinedParticipant.toObject ? joinedParticipant.toObject() : joinedParticipant) : null;
+            const plainParticipants = room.participants.map((p: any) => (p?.toObject ? p.toObject() : p));
+            const plainJoined = joinedParticipant ? ((joinedParticipant as any)?.toObject ? (joinedParticipant as any).toObject() : joinedParticipant) : null;
 
             const joinPayload = {
                 participant: plainJoined,
@@ -111,7 +111,7 @@ export class RoomHandler {
                     this.io.to(channel).emit('room:host_changed', { newHostId });
                     this.io.to(normalizedCode).emit('room:host_changed', { newHostId });
                 }
-                const plainParticipants = room.participants.map(p => (p.toObject ? p.toObject() : p));
+                const plainParticipants = room.participants.map((p: any) => (p?.toObject ? p.toObject() : p));
                 const leavePayload = {
                     userId: socket.user.id,
                     participants: plainParticipants,
@@ -144,7 +144,7 @@ export class RoomHandler {
             const room = await roomsService.setReady(normalizedCode, socket.user.id, Boolean(isReady));
 
             const channel = `hosted:${normalizedCode}`;
-            const plainParticipants = room.participants.map(p => (p.toObject ? p.toObject() : p));
+            const plainParticipants = room.participants.map((p: any) => (p?.toObject ? p.toObject() : p));
             const readyPayload = {
                 userId: socket.user.id,
                 isReady: Boolean(isReady),
@@ -167,7 +167,7 @@ export class RoomHandler {
             const room = await roomsService.kickParticipant(normalizedCode, socket.user.id, targetUserId);
 
             const channel = `hosted:${normalizedCode}`;
-            const plainParticipants = room.participants.map(p => (p.toObject ? p.toObject() : p));
+            const plainParticipants = room.participants.map((p: any) => (p?.toObject ? p.toObject() : p));
             const kickPayload = {
                 targetUserId,
                 participants: plainParticipants,

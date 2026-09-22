@@ -31,8 +31,8 @@ export class RoomsController {
             if (ioInstance) {
                 const normalizedCode = (roomCode || '').trim().toUpperCase();
                 const joinedParticipant = room.participants.find(p => p.userId.toString() === userId.toString());
-                const plainParticipants = room.participants.map(p => (p.toObject ? p.toObject() : p));
-                const plainJoined = joinedParticipant ? (joinedParticipant.toObject ? joinedParticipant.toObject() : joinedParticipant) : null;
+                const plainParticipants = room.participants.map((p: any) => (p?.toObject ? p.toObject() : p));
+                const plainJoined = joinedParticipant ? ((joinedParticipant as any)?.toObject ? (joinedParticipant as any).toObject() : joinedParticipant) : null;
                 const payload = {
                     participant: plainJoined,
                     participants: plainParticipants,
@@ -80,7 +80,7 @@ export class RoomsController {
 
             if (ioInstance) {
                 const normalizedCode = (roomCode || '').trim().toUpperCase();
-                const plainParticipants = room.participants.map(p => (p.toObject ? p.toObject() : p));
+                const plainParticipants = room.participants.map((p: any) => (p?.toObject ? p.toObject() : p));
                 const payload = {
                     targetUserId,
                     participants: plainParticipants,
