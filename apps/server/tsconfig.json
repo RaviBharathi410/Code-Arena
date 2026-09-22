@@ -3,24 +3,15 @@
         "target": "ESNext",
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
+        "rootDir": "./src",
         "outDir": "./dist",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "baseUrl": ".",
-        "paths": {
-            "@arena/database": [
-                "../../packages/database/schema.ts"
-            ],
-            "@arena/shared/*": [
-                "../../packages/shared/*"
-            ]
-        }
+        "forceConsistentCasingInFileNames": true
     },
     "include": [
-        "src/**/*",
-        "../../packages/database/**/*"
+        "src/**/*"
     ],
     "exclude": [
         "node_modules",
