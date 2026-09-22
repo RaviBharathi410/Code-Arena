@@ -68,7 +68,7 @@ export const createApp = () => {
                 styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
                 connectSrc: [
                     "'self'",
-                    ...env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+                    ...env.CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, '')),
                     "https://accounts.google.com",
                     "https://oauth2.googleapis.com",
                     "ws://localhost:5173",
@@ -86,7 +86,7 @@ export const createApp = () => {
 
     // ── Step 14: Strict CORS ───────────────────────────────────────────────
     // Explicit allowlist — no wildcards; credentials: true for HttpOnly cookies
-    const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+    const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, ''));
     app.use(
         cors({
             origin: (origin, callback) => {

@@ -21,7 +21,7 @@ const startServer = async () => {
 
     const io = new Server(httpServer, {
         cors: {
-            origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+            origin: env.CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, '')),
             credentials: true,
             methods: ['GET', 'POST'],
         },
