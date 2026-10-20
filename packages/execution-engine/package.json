@@ -10,7 +10,7 @@
     "test:security": "jest --preset ts-jest tests/adversarial"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "express": "^4.22.3",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
